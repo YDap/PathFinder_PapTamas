@@ -1,0 +1,52 @@
+name: pathfinder_app
+description: Pathfinder app (splash + login)
+publish_to: "none"
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_launcher_icons: ^0.14.4
+  google_fonts: ^6.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  flutter_native_splash: ^2.4.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/SplashScreen.jpg
+
+fflutter_native_splash:
+  color: "#C7F2E3"
+  color_dark: "#C7F2E3"
+  android_12:
+    color: "#C7F2E3"
+    color_dark: "#C7F2E3"
+  fullscreen: true
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+
+  # Alap ikon mindkét platformra
+  image_path: "assets/images/pathfinder_icon.png"
+
+  # iOS: kötelező az alfa-csatorna eltávolítása (különben elutasíthatják)
+  remove_alpha_ios: true
+
+  # Android: adaptív ikon (kör/négyzet kivágásokhoz)
+  adaptive_icon_foreground: "assets/images/pathfinder_icon.png"
+  adaptive_icon_background: "#C7F2E3"   # illeszd a splash színéhez (#C7F2E3)
+
+  # (Opc.) Android 13+: monochrome ikon a témaszínes csempéhez
+  adaptive_icon_monochrome: "assets/images/pathfinder_icon.png"
+
+
+
+
