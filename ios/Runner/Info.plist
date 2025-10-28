@@ -49,5 +49,8 @@
 		<true/>
 		<key>UIViewControllerBasedStatusBarAppearance</key>
 		<false/>
+		<key>NSLocationWhenInUseUsageDescription</key>
+<string>Az alkalmazás a közelben lévő helyek megjelenítéséhez a tartózkodási helyedet használja.</string>
+
 	</dict>
 </plist>

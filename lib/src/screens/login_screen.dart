@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'home_screen.dart';
 
 class LoginScreen extends StatelessWidget {
   static const routeName = '/login';
@@ -9,15 +10,14 @@ class LoginScreen extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      // Lágy, “erdei” háttérátmenet – nem zavaró, a kártya olvasható marad
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFFEFF7F1), // mohazöldes
-              Color(0xFFF6F1EA), // nagyon halvány bézs/barnás
+              Color(0xFFEFF7F1),
+              Color(0xFFF6F1EA),
             ],
           ),
         ),
@@ -31,7 +31,6 @@ class LoginScreen extends StatelessWidget {
                 child: Column(
                   children: [
                     const Spacer(),
-                    // App cím / szlogen
                     Text(
                       'Pathfinder',
                       style:
@@ -49,8 +48,6 @@ class LoginScreen extends StatelessWidget {
                           ),
                     ),
                     const SizedBox(height: 24),
-
-                    // Kártya a bejelentkezéshez
                     Card(
                       elevation: 6,
                       color: Colors.white,
@@ -84,7 +81,11 @@ class LoginScreen extends StatelessWidget {
                               width: double.infinity,
                               child: FilledButton(
                                 onPressed: () {
-                                  // TODO: később login logika
+                                  // Egyelőre bármit elfogadunk → Home
+                                  Navigator.pushReplacementNamed(
+                                    context,
+                                    HomeScreen.routeName,
+                                  );
                                 },
                                 child: const Text('Belépés'),
                               ),
@@ -101,10 +102,7 @@ class LoginScreen extends StatelessWidget {
                         ),
                       ),
                     ),
-
                     const SizedBox(height: 16),
-
-                    // Kisegítő sor alul
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -116,7 +114,6 @@ class LoginScreen extends StatelessWidget {
                       ],
                     ),
                     const Spacer(),
-                    // Apró “természetes” díszcsík
                     Container(
                       height: 4,
                       width: 120,
