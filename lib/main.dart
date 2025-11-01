@@ -4,7 +4,6 @@ import 'src/app.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase
-      .initializeApp(); // Reads config from google-services.json on Android
+  await Firebase.initializeApp(); // Android: google-services.json-ból olvas
   runApp(const PathfinderApp());
 }
