@@ -6,6 +6,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../services/auth_service.dart';
 import 'login_screen.dart';
+// NEW: import the S.O.S service
+import '../services/sos_service.dart';
 
 class HomeScreen extends StatefulWidget {
   static const routeName = '/home';
@@ -251,11 +253,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: FilledButton.icon(
-                          onPressed: () {
-                            ScaffoldMessenger.of(ctx).showSnackBar(
-                              const SnackBar(content: Text('S.O.S pressed')),
-                            );
-                          },
+                          // CHANGED: wire to SosService
+                          onPressed: () => SosService.showSosSheet(ctx),
                           icon: const Icon(Icons.emergency_share_rounded),
                           label: const Text('S.O.S'),
                           style: FilledButton.styleFrom(

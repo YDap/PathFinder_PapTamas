@@ -14,6 +14,9 @@ dependencies:
   geolocator: ^14.0.2
   firebase_core: ^4.2.0
   firebase_auth: ^6.1.1
+  url_launcher: ^6.3.0
+  # BUMPED: compatible with firebase_auth 6.x (uses web ^1.x)
+  share_plus: ^12.0.1
 
 dev_dependencies:
   flutter_test:
@@ -25,10 +28,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    # A splash kódod jelenleg JPG-t használ
     - assets/images/SplashScreen.jpg
-    # Ha PNG-t is használsz máshol, felveheted mellé:
-    # - assets/images/SplashScreen.png
 
 flutter_native_splash:
   color: "#C7F2E3"
@@ -38,7 +38,6 @@ flutter_native_splash:
     color_dark: "#C7F2E3"
   fullscreen: true
 
-# (opcionális – csak akkor futtasd, ha tényleg generálsz ikonokat)
 flutter_launcher_icons:
   android: true
   ios: true
