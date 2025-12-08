@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 import '../services/places_api.dart';
 
 class PlacesLayer extends StatefulWidget {
@@ -26,6 +29,8 @@ class _PlacesLayerState extends State<PlacesLayer> {
   List<Place> _places = const [];
   bool _loading = false;
   Object? _lastError;
+
+  Place? _selected; // highlight tapped marker
 
   @override
   void initState() {
@@ -107,31 +112,154 @@ class _PlacesLayerState extends State<PlacesLayer> {
     }
   }
 
+  Future<void> _openPlaceSheet(Place p) async {
+    setState(() => _selected = p);
+    await showModalBottomSheet(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: false,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 10),
+                decoration: BoxDecoration(
+                  color: cs.outlineVariant,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: CircleAvatar(
+                  backgroundColor: _colorFor(p.category),
+                  child: const Icon(Icons.place, color: Colors.white),
+                ),
+                title: Text(
+                  (p.name.isEmpty ? 'Unknown' : p.name),
+                  style: Theme.of(ctx)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                subtitle: Text(
+                  [
+                    if (p.category.isNotEmpty) p.category,
+                    if (p.elevationM != null) '${p.elevationM} m',
+                    '${p.latitude.toStringAsFixed(5)}, ${p.longitude.toStringAsFixed(5)}',
+                  ].join(' • '),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () => _navigateTo(p),
+                      icon: const Icon(Icons.navigation_rounded),
+                      label: const Text('Navigate'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        widget.mapController.move(
+                          LatLng(p.latitude, p.longitude),
+                          widget.mapController.camera.zoom,
+                        );
+                        Navigator.pop(ctx);
+                      },
+                      icon: const Icon(Icons.center_focus_strong),
+                      label: const Text('Center here'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () async {
+                    final text =
+                        '${p.latitude},${p.longitude}  ${(p.name.isEmpty ? 'Unknown' : p.name)}';
+                    await Clipboard.setData(ClipboardData(text: text));
+                    if (mounted) {
+                      ScaffoldMessenger.of(ctx).showSnackBar(
+                        const SnackBar(content: Text('Coordinates copied')),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.copy_all_rounded),
+                  label: const Text('Copy coords'),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (mounted) setState(() => _selected = null);
+  }
+
+  Future<void> _navigateTo(Place p) async {
+    // Prefer geo: URI (Android-wide), fall back to Google Maps web if needed.
+    final label = (p.name.isEmpty ? 'Destination' : p.name);
+    final geo = Uri.parse(
+        'geo:${p.latitude},${p.longitude}?q=${Uri.encodeComponent('${p.latitude},${p.longitude}($label)')}');
+    final gmaps = Uri.parse(
+        'https://www.google.com/maps/dir/?api=1&destination=${p.latitude},${p.longitude}&destination_place_id=&travelmode=driving');
+    try {
+      if (await canLaunchUrl(geo)) {
+        await launchUrl(geo, mode: LaunchMode.externalApplication);
+      } else {
+        await launchUrl(gmaps, mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open maps: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final markers = _places
-        .map(
-          (p) => Marker(
-            point: LatLng(p.latitude, p.longitude),
-            width: 30,
-            height: 30,
-            child: Tooltip(
-              message: '${p.name.isEmpty ? "Unknown" : p.name} (${p.category})',
-              waitDuration: const Duration(milliseconds: 300),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: _colorFor(p.category).withOpacity(0.9),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2),
-                  boxShadow: const [
-                    BoxShadow(blurRadius: 4, color: Colors.black26)
-                  ],
-                ),
+    final markers = _places.map((p) {
+      final isSelected = _selected?.id == p.id;
+      final color = _colorFor(p.category);
+      return Marker(
+        point: LatLng(p.latitude, p.longitude),
+        width: isSelected ? 34 : 28,
+        height: isSelected ? 34 : 28,
+        child: GestureDetector(
+          onTap: () => _openPlaceSheet(p),
+          child: Tooltip(
+            message: (p.name.isEmpty ? "Unknown" : p.name),
+            waitDuration: const Duration(milliseconds: 250),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 120),
+              decoration: BoxDecoration(
+                color: color.withOpacity(isSelected ? 1.0 : 0.9),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+                boxShadow: const [
+                  BoxShadow(blurRadius: 4, color: Colors.black26)
+                ],
               ),
             ),
           ),
-        )
-        .toList();
+        ),
+      );
+    }).toList();
 
     return Stack(
       children: [
