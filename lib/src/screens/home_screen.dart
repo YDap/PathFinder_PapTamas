@@ -4,10 +4,10 @@ import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../services/places_api.dart';
+import '../widgets/places_layer.dart';
 import '../services/auth_service.dart';
 import 'login_screen.dart';
-// NEW: import the S.O.S service
-import '../services/sos_service.dart';
 
 class HomeScreen extends StatefulWidget {
   static const routeName = '/home';
@@ -19,6 +19,15 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final MapController _mapController = MapController();
+
+  // Physical device over Wi-Fi — set your PC IP here:
+  final PlacesApi _placesApi =
+      const PlacesApi(baseUrl: 'http://127.0.0.1:3000');
+
+  // If you switch to USB + adb reverse later, use:
+  // final PlacesApi _placesApi =
+  //     const PlacesApi(baseUrl: 'http://127.0.0.1:3000');
+
   LatLng _initialCenter = const LatLng(45.9432, 24.9668);
   double _initialZoom = 6.5;
   LatLng? _currentLatLng;
@@ -34,10 +43,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      // no AppBar -> no white bar; controls are overlaid
       body: Stack(
         children: [
-          // MAP
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
@@ -48,6 +55,11 @@ class _HomeScreenState extends State<HomeScreen> {
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.example.pathfinder_app',
+              ),
+              PlacesLayer(
+                mapController: _mapController,
+                api: _placesApi,
+                limit: 1000,
               ),
               if (_currentLatLng != null)
                 MarkerLayer(
@@ -68,14 +80,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
             ],
           ),
-
-          // TOP CONTROLS OVER MAP
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
               child: Row(
                 children: [
-                  // LEFT: Current location button (same look)
                   FilledButton.tonalIcon(
                     onPressed: _ensureLocationAndCenter,
                     icon: const Icon(Icons.location_on_outlined),
@@ -87,18 +96,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const Spacer(),
-                  // RIGHT: Filter icon (same)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 6),
                     child: IconButton.filledTonal(
                       tooltip: 'Filters',
-                      onPressed: () {
-                        // TODO: open filters
-                      },
+                      onPressed: () {},
                       icon: const Icon(Icons.tune_rounded),
                     ),
                   ),
-                  // RIGHT: Profile icon (same)
                   IconButton.filled(
                     tooltip: 'Profile',
                     onPressed: () => _openProfileSheet(context),
@@ -127,7 +132,8 @@ class _HomeScreenState extends State<HomeScreen> {
         if (!silent && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-                content: Text('Location permission is permanently denied')),
+              content: Text('Location permission is permanently denied'),
+            ),
           );
         }
         return;
@@ -216,18 +222,18 @@ class _HomeScreenState extends State<HomeScreen> {
                               (display != null && display.isNotEmpty)
                                   ? display
                                   : 'Your profile',
-                              style:
-                                  Theme.of(ctx).textTheme.titleMedium?.copyWith(
-                                        fontWeight: FontWeight.w700,
-                                      ),
+                              style: Theme.of(ctx)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w700),
                             ),
                             const SizedBox(height: 4),
                             Text(
                               email ?? 'no-email@example.com',
-                              style:
-                                  Theme.of(ctx).textTheme.bodyMedium?.copyWith(
-                                        color: cs.onSurfaceVariant,
-                                      ),
+                              style: Theme.of(ctx)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(color: cs.onSurfaceVariant),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ],
@@ -253,8 +259,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: FilledButton.icon(
-                          // CHANGED: wire to SosService
-                          onPressed: () => SosService.showSosSheet(ctx),
+                          onPressed: () {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              const SnackBar(content: Text('S.O.S pressed')),
+                            );
+                          },
                           icon: const Icon(Icons.emergency_share_rounded),
                           label: const Text('S.O.S'),
                           style: FilledButton.styleFrom(
