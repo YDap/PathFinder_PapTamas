@@ -30,7 +30,7 @@ class _PlacesLayerState extends State<PlacesLayer> {
   bool _loading = false;
   Object? _lastError;
 
-  Place? _selected; // highlight tapped marker
+  Place? _selected;
 
   @override
   void initState() {
@@ -98,7 +98,9 @@ class _PlacesLayerState extends State<PlacesLayer> {
       case 'cave':
         return Colors.brown;
       case 'ruin':
-        return Colors.grey;
+      case 'ruins':
+      case 'archaeological_site':
+        return Colors.redAccent;
       case 'waterfall':
         return Colors.lightBlueAccent;
       case 'peak':
@@ -211,12 +213,11 @@ class _PlacesLayerState extends State<PlacesLayer> {
   }
 
   Future<void> _navigateTo(Place p) async {
-    // Prefer geo: URI (Android-wide), fall back to Google Maps web if needed.
     final label = (p.name.isEmpty ? 'Destination' : p.name);
     final geo = Uri.parse(
         'geo:${p.latitude},${p.longitude}?q=${Uri.encodeComponent('${p.latitude},${p.longitude}($label)')}');
     final gmaps = Uri.parse(
-        'https://www.google.com/maps/dir/?api=1&destination=${p.latitude},${p.longitude}&destination_place_id=&travelmode=driving');
+        'https://www.google.com/maps/dir/?api=1&destination=${p.latitude},${p.longitude}&travelmode=driving');
     try {
       if (await canLaunchUrl(geo)) {
         await launchUrl(geo, mode: LaunchMode.externalApplication);
