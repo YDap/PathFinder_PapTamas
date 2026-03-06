@@ -75,6 +75,8 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       body: Stack(
         children: [
+          // The animated location indicator is defined below
+
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
@@ -105,15 +107,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   markers: [
                     Marker(
                       point: _currentLatLng!,
-                      width: 28,
-                      height: 28,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.red.withOpacity(0.85),
-                          border: Border.all(color: Colors.white, width: 2),
-                        ),
-                      ),
+                      width: 40,
+                      height: 40,
+                      child: const _CurrentLocationIndicator(),
                     ),
                   ],
                 ),
@@ -725,5 +721,84 @@ class _HomeScreenState extends State<HomeScreen> {
         .split(' ')
         .map((word) => word[0].toUpperCase() + word.substring(1))
         .join(' ');
+  }
+}
+
+// ----------------------------------------------------------
+// Current location indicator widget with subtle pulse
+// ----------------------------------------------------------
+
+class _CurrentLocationIndicator extends StatefulWidget {
+  const _CurrentLocationIndicator({Key? key}) : super(key: key);
+
+  @override
+  State<_CurrentLocationIndicator> createState() =>
+      _CurrentLocationIndicatorState();
+}
+
+class _CurrentLocationIndicatorState extends State<_CurrentLocationIndicator>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+    _scale = Tween<double>(begin: 1.0, end: 1.6).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // pulsating circle
+          AnimatedBuilder(
+            animation: _scale,
+            builder: (ctx, child) {
+              return Container(
+                width: 24 * _scale.value,
+                height: 24 * _scale.value,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.blue
+                      .withOpacity(0.3 * (1 - (_scale.value - 1) / 0.6)),
+                ),
+              );
+            },
+          ),
+          // core icon
+          Container(
+            width: 20,
+            height: 20,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.blueAccent,
+              border: Border.all(color: Colors.white, width: 2),
+            ),
+            child: const Icon(
+              Icons.my_location,
+              color: Colors.white,
+              size: 12,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
