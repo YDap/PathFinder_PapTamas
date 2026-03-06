@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../services/places_api.dart';
+import '../services/sos_service.dart';
 import '../widgets/places_layer.dart';
 import '../services/auth_service.dart';
 import 'login_screen.dart';
@@ -20,13 +21,13 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final MapController _mapController = MapController();
 
-  // Physical device over Wi-Fi — set your PC IP here:
+  // USB + adb reverse esetere:
   final PlacesApi _placesApi =
       const PlacesApi(baseUrl: 'http://127.0.0.1:3000');
 
-  // If you switch to USB + adb reverse later, use:
+  // Ha Wi-Fi/LAN modra allnal at, akkor hasznalj ilyesmit:
   // final PlacesApi _placesApi =
-  //     const PlacesApi(baseUrl: 'http://127.0.0.1:3000');
+  //     const PlacesApi(baseUrl: 'http://<YOUR_PC_IP>:3000');
 
   LatLng _initialCenter = const LatLng(45.9432, 24.9668);
   double _initialZoom = 6.5;
@@ -93,8 +94,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     label: const Text('Current location'),
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      textStyle: const TextStyle(fontWeight: FontWeight.w600),
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      textStyle: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                   const Spacer(),
@@ -102,7 +107,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 6),
                     child: IconButton.filledTonal(
                       tooltip: 'Filters',
-                      onPressed: () {},
+                      onPressed: () {
+                        // TODO: filters kesobb
+                      },
                       icon: const Icon(Icons.tune_rounded),
                     ),
                   ),
@@ -145,7 +152,9 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!serviceEnabled) {
         if (!silent && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Please enable Location Services')),
+            const SnackBar(
+              content: Text('Please enable Location Services'),
+            ),
           );
         }
         return;
@@ -232,10 +241,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             const SizedBox(height: 4),
                             Text(
                               email ?? 'no-email@example.com',
-                              style: Theme.of(ctx)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(color: cs.onSurfaceVariant),
+                              style:
+                                  Theme.of(ctx).textTheme.bodyMedium?.copyWith(
+                                        color: cs.onSurfaceVariant,
+                                      ),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ],
@@ -251,7 +260,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           onPressed: () {
                             ScaffoldMessenger.of(ctx).showSnackBar(
                               const SnackBar(
-                                  content: Text('Stats coming soon')),
+                                content: Text('Stats coming soon'),
+                              ),
                             );
                           },
                           icon: const Icon(Icons.bar_chart_rounded),
@@ -262,9 +272,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       Expanded(
                         child: FilledButton.icon(
                           onPressed: () {
-                            ScaffoldMessenger.of(ctx).showSnackBar(
-                              const SnackBar(content: Text('S.O.S pressed')),
-                            );
+                            Navigator.of(ctx).pop();
+                            Future.delayed(Duration.zero, () {
+                              if (mounted) {
+                                SosService.showSosSheet(context);
+                              }
+                            });
                           },
                           icon: const Icon(Icons.emergency_share_rounded),
                           label: const Text('S.O.S'),
