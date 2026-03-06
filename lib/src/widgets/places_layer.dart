@@ -14,6 +14,8 @@ class PlacesLayer extends StatefulWidget {
   final Set<String> selectedCategories;
   final int? minElevation;
   final int? maxElevation;
+  final double? maxDistanceKm;
+  final LatLng? currentLocation;
   final bool showLocations;
 
   const PlacesLayer({
@@ -24,6 +26,8 @@ class PlacesLayer extends StatefulWidget {
     this.selectedCategories = const {},
     this.minElevation,
     this.maxElevation,
+    this.maxDistanceKm,
+    this.currentLocation,
     this.showLocations = true,
   });
 
@@ -278,6 +282,15 @@ class _PlacesLayerState extends State<PlacesLayer> {
       if (widget.selectedCategories.isNotEmpty &&
           !widget.selectedCategories.contains(normalizedPlaceCategory)) {
         return false;
+      }
+
+      // Distance filter
+      if (widget.maxDistanceKm != null && widget.currentLocation != null) {
+        final dist = Distance().as(LengthUnit.Kilometer,
+            widget.currentLocation!, LatLng(p.latitude, p.longitude));
+        if (dist > widget.maxDistanceKm!) {
+          return false;
+        }
       }
 
       // Apply elevation filters if specified

@@ -37,7 +37,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Set<String> _selectedCategories = {};
   int? _minElevation;
   int? _maxElevation;
-  double? _maxDistanceKm; // null = no limit
+  double? _maxDistanceKm;
   bool _showAllLocations = false; // Hidden by default
 
   // All available categories
@@ -575,7 +575,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       TextField(
                         decoration: InputDecoration(
                           labelText: 'Radius from current location',
-                          hintText: 'e.g. 10',
+                          hintText: 'e.g., 10',
                           suffixText: 'km',
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
