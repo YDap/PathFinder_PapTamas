@@ -37,13 +37,13 @@ class _HomeScreenState extends State<HomeScreen> {
   Set<String> _selectedCategories = {};
   int? _minElevation;
   int? _maxElevation;
+  bool _showAllLocations = false; // Hidden by default
 
   // All available categories
   final List<String> _allCategories = [
     'lake',
     'cave',
     'ruin',
-    'ruins',
     'archaeological_site',
     'waterfall',
     'peak',
@@ -97,6 +97,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 selectedCategories: _selectedCategories,
                 minElevation: _minElevation,
                 maxElevation: _maxElevation,
+                showLocations: _showAllLocations ||
+                    _selectedCategories.isNotEmpty ||
+                    _minElevation != null ||
+                    _maxElevation != null,
               ),
               if (_currentLatLng != null)
                 MarkerLayer(
@@ -158,6 +162,41 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
+          // Hint when no locations are shown
+          if (!_showAllLocations &&
+              _selectedCategories.isEmpty &&
+              _minElevation == null &&
+              _maxElevation == null)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 100,
+              left: 12,
+              right: 12,
+              child: Card(
+                elevation: 2,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        color: cs.primary,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Tap the filter icon to show locations or apply filters',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(color: cs.primary),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -394,6 +433,69 @@ class _HomeScreenState extends State<HomeScreen> {
                             .headlineSmall
                             ?.copyWith(fontWeight: FontWeight.w700),
                       ),
+                      const SizedBox(height: 16),
+
+                      // Show All Locations Toggle
+                      Card(
+                        color: _showAllLocations
+                            ? cs.primaryContainer
+                            : cs.surfaceContainerHigh,
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Row(
+                            children: [
+                              Icon(
+                                _showAllLocations
+                                    ? Icons.visibility
+                                    : Icons.visibility_off,
+                                color: _showAllLocations ? cs.primary : null,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Show All Locations',
+                                      style: Theme.of(ctx)
+                                          .textTheme
+                                          .titleSmall
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                            color: _showAllLocations
+                                                ? cs.onPrimaryContainer
+                                                : null,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Display all available places on the map',
+                                      style: Theme.of(ctx)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: _showAllLocations
+                                                ? cs.onPrimaryContainer
+                                                : cs.onSurfaceVariant,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Switch(
+                                value: _showAllLocations,
+                                onChanged: (value) {
+                                  setState(() {
+                                    this._showAllLocations = value;
+                                  });
+                                  this.setState(() {});
+                                },
+                                activeColor: cs.primary,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                       const SizedBox(height: 20),
 
                       // Categories Section
@@ -423,13 +525,14 @@ class _HomeScreenState extends State<HomeScreen> {
                             label: Text(_formatCategoryName(category)),
                             selected: isSelected,
                             onSelected: (selected) {
-                              this.setState(() {
+                              setState(() {
                                 if (selected) {
                                   _selectedCategories.add(category);
                                 } else {
                                   _selectedCategories.remove(category);
                                 }
                               });
+                              this.setState(() {});
                             },
                             backgroundColor: Theme.of(ctx).colorScheme.surface,
                             selectedColor:
@@ -477,9 +580,10 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                               keyboardType: TextInputType.number,
                               onChanged: (value) {
-                                this.setState(() {
+                                setState(() {
                                   _minElevation = int.tryParse(value);
                                 });
+                                this.setState(() {});
                               },
                               controller: _minElevationController,
                             ),
@@ -497,9 +601,10 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                               keyboardType: TextInputType.number,
                               onChanged: (value) {
-                                this.setState(() {
+                                setState(() {
                                   _maxElevation = int.tryParse(value);
                                 });
+                                this.setState(() {});
                               },
                               controller: _maxElevationController,
                             ),
@@ -511,13 +616,15 @@ class _HomeScreenState extends State<HomeScreen> {
                       // Reset Button
                       OutlinedButton.icon(
                         onPressed: () {
-                          this.setState(() {
+                          setState(() {
                             _selectedCategories.clear();
                             _minElevation = null;
                             _maxElevation = null;
+                            _showAllLocations = false;
                             _minElevationController.clear();
                             _maxElevationController.clear();
                           });
+                          this.setState(() {});
                         },
                         icon: const Icon(Icons.restart_alt_rounded),
                         label: const Text('Clear All Filters'),

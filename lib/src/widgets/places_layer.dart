@@ -14,6 +14,7 @@ class PlacesLayer extends StatefulWidget {
   final Set<String> selectedCategories;
   final int? minElevation;
   final int? maxElevation;
+  final bool showLocations;
 
   const PlacesLayer({
     super.key,
@@ -23,6 +24,7 @@ class PlacesLayer extends StatefulWidget {
     this.selectedCategories = const {},
     this.minElevation,
     this.maxElevation,
+    this.showLocations = true,
   });
 
   @override
@@ -240,6 +242,26 @@ class _PlacesLayerState extends State<PlacesLayer> {
 
   @override
   Widget build(BuildContext context) {
+    // If locations should be hidden, don't show any markers
+    if (!widget.showLocations) {
+      return Stack(
+        children: [
+          if (_loading)
+            const Positioned(
+              right: 12,
+              top: 12,
+              child: _LoadingChip(),
+            ),
+          if (_lastError != null)
+            Positioned(
+              right: 12,
+              top: 12,
+              child: _ErrorChip(msg: _lastError.toString()),
+            ),
+        ],
+      );
+    }
+
     // Apply filters to places
     final filteredPlaces = _places.where((p) {
       // If categories are selected, only show places in those categories
