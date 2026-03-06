@@ -50,15 +50,17 @@ class _HomeScreenState extends State<HomeScreen> {
     'viewpoint',
   ];
 
-  // Text controllers for elevation inputs
+  // Text controllers for elevation & distance inputs
   late TextEditingController _minElevationController;
   late TextEditingController _maxElevationController;
+  late TextEditingController _distanceController;
 
   @override
   void initState() {
     super.initState();
     _minElevationController = TextEditingController();
     _maxElevationController = TextEditingController();
+    _distanceController = TextEditingController();
     _ensureLocationAndCenter(silent: true);
   }
 
@@ -66,6 +68,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _minElevationController.dispose();
     _maxElevationController.dispose();
+    _distanceController.dispose();
     super.dispose();
   }
 
@@ -588,9 +591,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 double.tryParse(v.replaceAll(',', '.'));
                           });
                         },
-                        controller: TextEditingController(
-                          text: _maxDistanceKm?.toString() ?? '',
-                        ),
+                        controller: _distanceController,
                       ),
                       const SizedBox(height: 12),
 
@@ -649,9 +650,11 @@ class _HomeScreenState extends State<HomeScreen> {
                             _selectedCategories.clear();
                             _minElevation = null;
                             _maxElevation = null;
+                            _maxDistanceKm = null;
                             _showAllLocations = false;
                             _minElevationController.clear();
                             _maxElevationController.clear();
+                            _distanceController.clear();
                           });
                           this.setState(() {});
                         },
@@ -663,7 +666,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       // Active Filters Summary
                       if (_selectedCategories.isNotEmpty ||
                           _minElevation != null ||
-                          _maxElevation != null)
+                          _maxElevation != null ||
+                          _maxDistanceKm != null)
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
@@ -720,15 +724,38 @@ class _HomeScreenState extends State<HomeScreen> {
                                     ],
                                   ),
                                 ),
-                              const SizedBox(height: 8),
-                              Text(
-                                '💡 Note: Places without elevation data will always be shown.',
-                                style:
-                                    Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                                          color: cs.onSurfaceVariant,
-                                          fontStyle: FontStyle.italic,
+                              if (_maxDistanceKm != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.map, size: 14),
+                                      const SizedBox(width: 4),
+                                      Expanded(
+                                        child: Text(
+                                          '≤ ${_maxDistanceKm!.toStringAsFixed(1)} km',
+                                          style:
+                                              Theme.of(ctx).textTheme.bodySmall,
                                         ),
-                              ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              if (_minElevation != null ||
+                                  _maxElevation != null)
+                                const SizedBox(height: 8),
+                              if (_minElevation != null ||
+                                  _maxElevation != null)
+                                Text(
+                                  '💡 Note: Places without elevation data will always be shown.',
+                                  style: Theme.of(ctx)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color: cs.onSurfaceVariant,
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                ),
                             ],
                           ),
                         ),

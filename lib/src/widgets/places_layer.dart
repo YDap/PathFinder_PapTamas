@@ -172,11 +172,21 @@ class _PlacesLayerState extends State<PlacesLayer> {
                       ?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 subtitle: Text(
-                  [
-                    if (p.category.isNotEmpty) p.category,
-                    if (p.elevationM != null) '${p.elevationM} m',
-                    '${p.latitude.toStringAsFixed(5)}, ${p.longitude.toStringAsFixed(5)}',
-                  ].join(' • '),
+                  () {
+                    final parts = <String>[];
+                    if (p.category.isNotEmpty) parts.add(p.category);
+                    if (p.elevationM != null) parts.add('${p.elevationM} m');
+                    parts.add(
+                        '${p.latitude.toStringAsFixed(5)}, ${p.longitude.toStringAsFixed(5)}');
+                    if (widget.currentLocation != null) {
+                      final dist = Distance().as(
+                          LengthUnit.Kilometer,
+                          widget.currentLocation!,
+                          LatLng(p.latitude, p.longitude));
+                      parts.add('${dist.toStringAsFixed(1)} km away');
+                    }
+                    return parts.join(' • ');
+                  }(),
                 ),
               ),
               const SizedBox(height: 8),
