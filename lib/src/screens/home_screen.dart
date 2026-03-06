@@ -60,6 +60,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Place? _navigationDestination;
   List<LatLng> _routePolyline = [];
   bool _isNavigating = false;
+  double _distanceToDestination = 0;
 
   @override
   void initState() {
@@ -162,21 +163,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const Spacer(),
-                  if (_isNavigating)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      child: FilledButton.tonalIcon(
-                        onPressed: _stopNavigation,
-                        icon: const Icon(Icons.close),
-                        label: const Text('Stop Nav'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: Colors.red.shade100,
-                          foregroundColor: Colors.red.shade900,
-                        ),
-                      ),
-                    )
-                  else
-                    const SizedBox.shrink(),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 6),
                     child: IconButton.filledTonal(
@@ -229,6 +215,122 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     ],
+                  ),
+                ),
+              ),
+            ),
+          // Navigation bottom bar with distance slider
+          if (_isNavigating && _navigationDestination != null)
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: SafeArea(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHighest,
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black12,
+                        blurRadius: 8,
+                        offset: Offset(0, -2),
+                      )
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Navigating to',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
+                                        ?.copyWith(color: cs.onSurfaceVariant),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _navigationDestination!.name.isEmpty
+                                        ? 'Destination'
+                                        : _navigationDestination!.name,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w700),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  'Distance',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .labelSmall
+                                      ?.copyWith(color: cs.onSurfaceVariant),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${_distanceToDestination.toStringAsFixed(2)} km',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                        color: cs.primary,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        // Distance progress bar
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: LinearProgressIndicator(
+                            value: (_navigationDestination != null &&
+                                    _distanceToDestination > 0)
+                                ? (1 -
+                                        (_distanceToDestination /
+                                            (_distanceToDestination + 0.5)))
+                                    .clamp(0, 1)
+                                : 0,
+                            minHeight: 8,
+                            backgroundColor: cs.outlineVariant,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              cs.primary,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        // Stop navigation button
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: _stopNavigation,
+                            icon: const Icon(Icons.close),
+                            label: const Text('Stop Navigation'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Colors.red.shade600,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -379,6 +481,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _isNavigating = false;
         _routePolyline = [];
         _navigationDestination = null;
+        _distanceToDestination = 0;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Destination reached!')),
@@ -395,6 +498,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) {
       setState(() {
         _routePolyline = result.value;
+        _distanceToDestination = distToDestination;
       });
     }
   }
@@ -404,6 +508,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _isNavigating = false;
       _routePolyline = [];
       _navigationDestination = null;
+      _distanceToDestination = 0;
     });
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Navigation stopped')),
