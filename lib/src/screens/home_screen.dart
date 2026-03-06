@@ -51,10 +51,23 @@ class _HomeScreenState extends State<HomeScreen> {
     'spring',
   ];
 
+  // Text controllers for elevation inputs
+  late TextEditingController _minElevationController;
+  late TextEditingController _maxElevationController;
+
   @override
   void initState() {
     super.initState();
+    _minElevationController = TextEditingController();
+    _maxElevationController = TextEditingController();
     _ensureLocationAndCenter(silent: true);
+  }
+
+  @override
+  void dispose() {
+    _minElevationController.dispose();
+    _maxElevationController.dispose();
+    super.dispose();
   }
 
   @override
@@ -385,11 +398,19 @@ class _HomeScreenState extends State<HomeScreen> {
 
                       // Categories Section
                       Text(
-                        'Categories',
+                        'Place Types',
                         style: Theme.of(ctx)
                             .textTheme
                             .titleMedium
                             ?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Select categories to display (leave empty to show all)',
+                        style: Theme.of(ctx)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(color: cs.onSurfaceVariant),
                       ),
                       const SizedBox(height: 12),
                       Wrap(
@@ -409,7 +430,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                   _selectedCategories.remove(category);
                                 }
                               });
-                              setState(() {});
                             },
                             backgroundColor: Theme.of(ctx).colorScheme.surface,
                             selectedColor:
@@ -426,55 +446,65 @@ class _HomeScreenState extends State<HomeScreen> {
 
                       // Elevation Filter
                       Text(
-                        'Elevation Range',
+                        'Elevation Range (meters)',
                         style: Theme.of(ctx)
                             .textTheme
                             .titleMedium
                             ?.copyWith(fontWeight: FontWeight.w600),
                       ),
-                      const SizedBox(height: 12),
-
-                      // Min Elevation
-                      TextField(
-                        decoration: InputDecoration(
-                          labelText: 'Min Elevation (m)',
-                          hintText: 'e.g., 500',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        keyboardType: TextInputType.number,
-                        onChanged: (value) {
-                          this.setState(() {
-                            _minElevation = int.tryParse(value);
-                          });
-                          setState(() {});
-                        },
-                        controller: TextEditingController(
-                          text: _minElevation?.toString() ?? '',
-                        ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Filter places by altitude. Leave empty for no limit.',
+                        style: Theme.of(ctx)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(color: cs.onSurfaceVariant),
                       ),
                       const SizedBox(height: 12),
 
-                      // Max Elevation
-                      TextField(
-                        decoration: InputDecoration(
-                          labelText: 'Max Elevation (m)',
-                          hintText: 'e.g., 2000',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                      // Elevation Range Inputs
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              decoration: InputDecoration(
+                                labelText: 'Min (m)',
+                                prefixIcon: const Icon(Icons.trending_up),
+                                hintText: '0',
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              keyboardType: TextInputType.number,
+                              onChanged: (value) {
+                                this.setState(() {
+                                  _minElevation = int.tryParse(value);
+                                });
+                              },
+                              controller: _minElevationController,
+                            ),
                           ),
-                        ),
-                        keyboardType: TextInputType.number,
-                        onChanged: (value) {
-                          this.setState(() {
-                            _maxElevation = int.tryParse(value);
-                          });
-                          setState(() {});
-                        },
-                        controller: TextEditingController(
-                          text: _maxElevation?.toString() ?? '',
-                        ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextField(
+                              decoration: InputDecoration(
+                                labelText: 'Max (m)',
+                                prefixIcon: const Icon(Icons.trending_up),
+                                hintText: '∞',
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              keyboardType: TextInputType.number,
+                              onChanged: (value) {
+                                this.setState(() {
+                                  _maxElevation = int.tryParse(value);
+                                });
+                              },
+                              controller: _maxElevationController,
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 24),
 
@@ -485,8 +515,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             _selectedCategories.clear();
                             _minElevation = null;
                             _maxElevation = null;
+                            _minElevationController.clear();
+                            _maxElevationController.clear();
                           });
-                          setState(() {});
                         },
                         icon: const Icon(Icons.restart_alt_rounded),
                         label: const Text('Clear All Filters'),
@@ -517,20 +548,51 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                               const SizedBox(height: 8),
                               if (_selectedCategories.isNotEmpty)
-                                Text(
-                                  'Categories: ${_selectedCategories.map(_formatCategoryName).join(', ')}',
-                                  style: Theme.of(ctx).textTheme.bodySmall,
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.category, size: 14),
+                                      const SizedBox(width: 4),
+                                      Expanded(
+                                        child: Text(
+                                          _selectedCategories
+                                              .map(_formatCategoryName)
+                                              .join(', '),
+                                          style:
+                                              Theme.of(ctx).textTheme.bodySmall,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              if (_minElevation != null)
-                                Text(
-                                  'Min Elevation: $_minElevation m',
-                                  style: Theme.of(ctx).textTheme.bodySmall,
+                              if (_minElevation != null ||
+                                  _maxElevation != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.trending_up, size: 14),
+                                      const SizedBox(width: 4),
+                                      Expanded(
+                                        child: Text(
+                                          'Altitude: ${_minElevation ?? '0'} - ${_maxElevation ?? '∞'} m',
+                                          style:
+                                              Theme.of(ctx).textTheme.bodySmall,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              if (_maxElevation != null)
-                                Text(
-                                  'Max Elevation: $_maxElevation m',
-                                  style: Theme.of(ctx).textTheme.bodySmall,
-                                ),
+                              const SizedBox(height: 8),
+                              Text(
+                                '💡 Note: Places without elevation data will always be shown.',
+                                style:
+                                    Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                                          color: cs.onSurfaceVariant,
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                              ),
                             ],
                           ),
                         ),
