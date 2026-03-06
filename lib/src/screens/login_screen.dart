@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
 import 'home_screen.dart';
 import 'register_screen.dart';
@@ -15,8 +16,57 @@ class _LoginScreenState extends State<LoginScreen> {
   final _email = TextEditingController();
   final _pass = TextEditingController();
   bool _loading = false;
+  bool _rememberMe = false;
 
   final _auth = AuthService();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedCredentials();
+  }
+
+  Future<void> _loadSavedCredentials() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedEmail = prefs.getString('saved_email');
+      final savedPassword = prefs.getString('saved_password');
+      final rememberMe = prefs.getBool('remember_me') ?? false;
+
+      if (savedEmail != null && savedPassword != null && rememberMe) {
+        setState(() {
+          _email.text = savedEmail;
+          _pass.text = savedPassword;
+          _rememberMe = true;
+        });
+      }
+    } catch (e) {
+      print('Error loading saved credentials: $e');
+    }
+  }
+
+  Future<void> _saveCredentials() async {
+    if (!_rememberMe) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('saved_email', _email.text);
+      await prefs.setString('saved_password', _pass.text);
+      await prefs.setBool('remember_me', true);
+    } catch (e) {
+      print('Error saving credentials: $e');
+    }
+  }
+
+  Future<void> _clearSavedCredentials() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('saved_email');
+      await prefs.remove('saved_password');
+      await prefs.setBool('remember_me', false);
+    } catch (e) {
+      print('Error clearing credentials: $e');
+    }
+  }
 
   @override
   void dispose() {
@@ -34,6 +84,11 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       if (!mounted) return;
       if (user != null) {
+        if (_rememberMe) {
+          await _saveCredentials();
+        } else {
+          await _clearSavedCredentials();
+        }
         Navigator.pushNamedAndRemoveUntil(
           context,
           HomeScreen.routeName,
@@ -119,6 +174,25 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               obscureText: true,
                               onSubmitted: (_) => _loading ? null : _signIn(),
+                            ),
+                            const SizedBox(height: 12),
+                            // Remember Me Checkbox
+                            Row(
+                              children: [
+                                Checkbox(
+                                  value: _rememberMe,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _rememberMe = value ?? false;
+                                    });
+                                  },
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Remember me',
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ],
                             ),
                             const SizedBox(height: 18),
                             SizedBox(

@@ -104,22 +104,29 @@ class _PlacesLayerState extends State<PlacesLayer> {
       case 'lake':
         return Colors.blueAccent;
       case 'cave':
+      case 'caves':
         return Colors.brown;
       case 'ruin':
       case 'ruins':
-      case 'archaeological_site':
         return Colors.redAccent;
-      case 'waterfall':
-        return Colors.lightBlueAccent;
       case 'peak':
         return Colors.deepPurple;
-      case 'shelter':
-        return Colors.green;
       case 'spring':
         return Colors.teal;
+      case 'viewpoint':
+        return Colors.indigo;
       default:
         return Colors.orange;
     }
+  }
+
+  /// Normalize category names for filtering (handle plural/singular variants)
+  String _normalizeCategory(String category) {
+    final cat = category.toLowerCase();
+    // Map plural/alternate forms to canonical forms
+    if (cat == 'caves' || cat == 'cave_entrance') return 'cave';
+    if (cat == 'ruins' || cat == 'archaeological_site') return 'ruin';
+    return cat;
   }
 
   Future<void> _openPlaceSheet(Place p) async {
@@ -264,9 +271,12 @@ class _PlacesLayerState extends State<PlacesLayer> {
 
     // Apply filters to places
     final filteredPlaces = _places.where((p) {
+      // Normalize the place category for comparison
+      final normalizedPlaceCategory = _normalizeCategory(p.category);
+
       // If categories are selected, only show places in those categories
       if (widget.selectedCategories.isNotEmpty &&
-          !widget.selectedCategories.contains(p.category.toLowerCase())) {
+          !widget.selectedCategories.contains(normalizedPlaceCategory)) {
         return false;
       }
 

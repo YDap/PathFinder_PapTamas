@@ -44,11 +44,9 @@ class _HomeScreenState extends State<HomeScreen> {
     'lake',
     'cave',
     'ruin',
-    'archaeological_site',
-    'waterfall',
     'peak',
-    'shelter',
     'spring',
+    'viewpoint',
   ];
 
   // Text controllers for elevation inputs
