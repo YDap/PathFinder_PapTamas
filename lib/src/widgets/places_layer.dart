@@ -11,12 +11,18 @@ class PlacesLayer extends StatefulWidget {
   final MapController mapController;
   final PlacesApi api;
   final int limit;
+  final Set<String> selectedCategories;
+  final int? minElevation;
+  final int? maxElevation;
 
   const PlacesLayer({
     super.key,
     required this.mapController,
     required this.api,
     this.limit = 1000,
+    this.selectedCategories = const {},
+    this.minElevation,
+    this.maxElevation,
   });
 
   @override
@@ -234,7 +240,30 @@ class _PlacesLayerState extends State<PlacesLayer> {
 
   @override
   Widget build(BuildContext context) {
-    final markers = _places.map((p) {
+    // Apply filters to places
+    final filteredPlaces = _places.where((p) {
+      // If categories are selected, only show places in those categories
+      if (widget.selectedCategories.isNotEmpty &&
+          !widget.selectedCategories.contains(p.category.toLowerCase())) {
+        return false;
+      }
+
+      // Apply elevation filters if specified
+      if (widget.minElevation != null && p.elevationM != null) {
+        if (p.elevationM! < widget.minElevation!) {
+          return false;
+        }
+      }
+      if (widget.maxElevation != null && p.elevationM != null) {
+        if (p.elevationM! > widget.maxElevation!) {
+          return false;
+        }
+      }
+
+      return true;
+    }).toList();
+
+    final markers = filteredPlaces.map((p) {
       final isSelected = _selected?.id == p.id;
       final color = _colorFor(p.category);
       return Marker(

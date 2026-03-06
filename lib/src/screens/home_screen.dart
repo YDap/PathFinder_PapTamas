@@ -33,6 +33,24 @@ class _HomeScreenState extends State<HomeScreen> {
   double _initialZoom = 6.5;
   LatLng? _currentLatLng;
 
+  // Filter state
+  Set<String> _selectedCategories = {};
+  int? _minElevation;
+  int? _maxElevation;
+
+  // All available categories
+  final List<String> _allCategories = [
+    'lake',
+    'cave',
+    'ruin',
+    'ruins',
+    'archaeological_site',
+    'waterfall',
+    'peak',
+    'shelter',
+    'spring',
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -63,6 +81,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 mapController: _mapController,
                 api: _placesApi,
                 limit: 1000,
+                selectedCategories: _selectedCategories,
+                minElevation: _minElevation,
+                maxElevation: _maxElevation,
               ),
               if (_currentLatLng != null)
                 MarkerLayer(
@@ -107,9 +128,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 6),
                     child: IconButton.filledTonal(
                       tooltip: 'Filters',
-                      onPressed: () {
-                        // TODO: filters kesobb
-                      },
+                      onPressed: () => _openFiltersSheet(context),
                       icon: const Icon(Icons.tune_rounded),
                     ),
                   ),
@@ -314,5 +333,230 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       },
     );
+  }
+
+  void _openFiltersSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+
+        return StatefulBuilder(
+          builder: (ctx, setState) {
+            return DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: 0.75,
+              minChildSize: 0.5,
+              maxChildSize: 0.95,
+              builder: (ctx, scrollCtl) {
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  child: ListView(
+                    controller: scrollCtl,
+                    children: [
+                      // Handle bar
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                            color: cs.outlineVariant,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                      ),
+
+                      // Title
+                      Text(
+                        'Filter Places',
+                        style: Theme.of(ctx)
+                            .textTheme
+                            .headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Categories Section
+                      Text(
+                        'Categories',
+                        style: Theme.of(ctx)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _allCategories.map((category) {
+                          final isSelected =
+                              _selectedCategories.contains(category);
+                          return FilterChip(
+                            label: Text(_formatCategoryName(category)),
+                            selected: isSelected,
+                            onSelected: (selected) {
+                              this.setState(() {
+                                if (selected) {
+                                  _selectedCategories.add(category);
+                                } else {
+                                  _selectedCategories.remove(category);
+                                }
+                              });
+                              setState(() {});
+                            },
+                            backgroundColor: Theme.of(ctx).colorScheme.surface,
+                            selectedColor:
+                                Theme.of(ctx).colorScheme.primaryContainer,
+                            side: BorderSide(
+                              color: isSelected
+                                  ? Theme.of(ctx).colorScheme.primary
+                                  : cs.outline,
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Elevation Filter
+                      Text(
+                        'Elevation Range',
+                        style: Theme.of(ctx)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Min Elevation
+                      TextField(
+                        decoration: InputDecoration(
+                          labelText: 'Min Elevation (m)',
+                          hintText: 'e.g., 500',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        keyboardType: TextInputType.number,
+                        onChanged: (value) {
+                          this.setState(() {
+                            _minElevation = int.tryParse(value);
+                          });
+                          setState(() {});
+                        },
+                        controller: TextEditingController(
+                          text: _minElevation?.toString() ?? '',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Max Elevation
+                      TextField(
+                        decoration: InputDecoration(
+                          labelText: 'Max Elevation (m)',
+                          hintText: 'e.g., 2000',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        keyboardType: TextInputType.number,
+                        onChanged: (value) {
+                          this.setState(() {
+                            _maxElevation = int.tryParse(value);
+                          });
+                          setState(() {});
+                        },
+                        controller: TextEditingController(
+                          text: _maxElevation?.toString() ?? '',
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Reset Button
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          this.setState(() {
+                            _selectedCategories.clear();
+                            _minElevation = null;
+                            _maxElevation = null;
+                          });
+                          setState(() {});
+                        },
+                        icon: const Icon(Icons.restart_alt_rounded),
+                        label: const Text('Clear All Filters'),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Active Filters Summary
+                      if (_selectedCategories.isNotEmpty ||
+                          _minElevation != null ||
+                          _maxElevation != null)
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: cs.primaryContainer,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: cs.primary),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'Active Filters:',
+                                style: Theme.of(ctx)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(fontWeight: FontWeight.w600),
+                              ),
+                              const SizedBox(height: 8),
+                              if (_selectedCategories.isNotEmpty)
+                                Text(
+                                  'Categories: ${_selectedCategories.map(_formatCategoryName).join(', ')}',
+                                  style: Theme.of(ctx).textTheme.bodySmall,
+                                ),
+                              if (_minElevation != null)
+                                Text(
+                                  'Min Elevation: $_minElevation m',
+                                  style: Theme.of(ctx).textTheme.bodySmall,
+                                ),
+                              if (_maxElevation != null)
+                                Text(
+                                  'Max Elevation: $_maxElevation m',
+                                  style: Theme.of(ctx).textTheme.bodySmall,
+                                ),
+                            ],
+                          ),
+                        ),
+                      const SizedBox(height: 16),
+
+                      // Close Button
+                      FilledButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('Apply Filters'),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  String _formatCategoryName(String category) {
+    return category
+        .replaceAll('_', ' ')
+        .split(' ')
+        .map((word) => word[0].toUpperCase() + word.substring(1))
+        .join(' ');
   }
 }
