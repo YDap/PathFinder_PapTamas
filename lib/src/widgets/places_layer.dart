@@ -17,6 +17,7 @@ class PlacesLayer extends StatefulWidget {
   final double? maxDistanceKm;
   final LatLng? currentLocation;
   final bool showLocations;
+  final Function(Place)? onNavigate;
 
   const PlacesLayer({
     super.key,
@@ -29,6 +30,7 @@ class PlacesLayer extends StatefulWidget {
     this.maxDistanceKm,
     this.currentLocation,
     this.showLocations = true,
+    this.onNavigate,
   });
 
   @override
@@ -242,22 +244,27 @@ class _PlacesLayerState extends State<PlacesLayer> {
   }
 
   Future<void> _navigateTo(Place p) async {
-    final label = (p.name.isEmpty ? 'Destination' : p.name);
-    final geo = Uri.parse(
-        'geo:${p.latitude},${p.longitude}?q=${Uri.encodeComponent('${p.latitude},${p.longitude}($label)')}');
-    final gmaps = Uri.parse(
-        'https://www.google.com/maps/dir/?api=1&destination=${p.latitude},${p.longitude}&travelmode=driving');
-    try {
-      if (await canLaunchUrl(geo)) {
-        await launchUrl(geo, mode: LaunchMode.externalApplication);
-      } else {
-        await launchUrl(gmaps, mode: LaunchMode.externalApplication);
+    if (widget.onNavigate != null) {
+      widget.onNavigate!(p);
+      Navigator.of(context).pop();
+    } else {
+      final label = (p.name.isEmpty ? 'Destination' : p.name);
+      final geo = Uri.parse(
+          'geo:${p.latitude},${p.longitude}?q=${Uri.encodeComponent('${p.latitude},${p.longitude}($label)')}');
+      final gmaps = Uri.parse(
+          'https://www.google.com/maps/dir/?api=1&destination=${p.latitude},${p.longitude}&travelmode=driving');
+      try {
+        if (await canLaunchUrl(geo)) {
+          await launchUrl(geo, mode: LaunchMode.externalApplication);
+        } else {
+          await launchUrl(gmaps, mode: LaunchMode.externalApplication);
+        }
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open maps: $e')),
+        );
       }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not open maps: $e')),
-      );
     }
   }
 

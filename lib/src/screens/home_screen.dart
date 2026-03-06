@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../services/places_api.dart';
 import '../services/sos_service.dart';
+import '../services/routing_service.dart';
 import '../widgets/places_layer.dart';
 import '../services/auth_service.dart';
 import 'login_screen.dart';
@@ -54,6 +55,11 @@ class _HomeScreenState extends State<HomeScreen> {
   late TextEditingController _minElevationController;
   late TextEditingController _maxElevationController;
   late TextEditingController _distanceController;
+
+  // Navigation state
+  Place? _navigationDestination;
+  List<LatLng> _routePolyline = [];
+  bool _isNavigating = false;
 
   @override
   void initState() {
@@ -108,7 +114,21 @@ class _HomeScreenState extends State<HomeScreen> {
                     _minElevation != null ||
                     _maxElevation != null ||
                     _maxDistanceKm != null,
+                onNavigate: _startNavigation,
               ),
+              // Navigation route polyline
+              if (_routePolyline.isNotEmpty)
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: _routePolyline,
+                      color: const Color(0xFF2196F3),
+                      strokeWidth: 4,
+                      borderStrokeWidth: 2,
+                      borderColor: Colors.white,
+                    ),
+                  ],
+                ),
               if (_currentLatLng != null)
                 MarkerLayer(
                   markers: [
@@ -142,6 +162,21 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const Spacer(),
+                  if (_isNavigating)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: FilledButton.tonalIcon(
+                        onPressed: _stopNavigation,
+                        icon: const Icon(Icons.close),
+                        label: const Text('Stop Nav'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.red.shade100,
+                          foregroundColor: Colors.red.shade900,
+                        ),
+                      ),
+                    )
+                  else
+                    const SizedBox.shrink(),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 6),
                     child: IconButton.filledTonal(
@@ -242,6 +277,11 @@ class _HomeScreenState extends State<HomeScreen> {
       });
 
       _mapController.move(latLng, 15);
+
+      // If navigation is active, update polyline
+      if (_isNavigating) {
+        _updateNavigationPolyline(latLng);
+      }
     } catch (e) {
       if (!silent && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -249,6 +289,125 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       }
     }
+  }
+
+  Future<void> _startNavigation(Place destination) async {
+    if (_currentLatLng == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Getting location...')),
+      );
+      await _ensureLocationAndCenter(silent: false);
+    }
+
+    if (_currentLatLng == null) return;
+
+    setState(() {
+      _navigationDestination = destination;
+      _isNavigating = true;
+    });
+
+    try {
+      final routingService = RoutingService();
+      final polyline = await routingService.getRoute(
+        _currentLatLng!,
+        LatLng(destination.latitude, destination.longitude),
+      );
+
+      if (mounted) {
+        setState(() {
+          _routePolyline = polyline;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Navigating to ${destination.name.isEmpty ? 'destination' : destination.name}'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+
+        // Start listening to position updates
+        _listenToPositionChanges();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isNavigating = false;
+          _navigationDestination = null;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to get route: $e')),
+        );
+      }
+    }
+  }
+
+  void _listenToPositionChanges() {
+    Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 5, // Update when moved 5 meters
+      ),
+    ).listen((Position position) {
+      if (_isNavigating && mounted) {
+        final userLocation = LatLng(position.latitude, position.longitude);
+        setState(() {
+          _currentLatLng = userLocation;
+        });
+        _updateNavigationPolyline(userLocation);
+      }
+    });
+  }
+
+  void _updateNavigationPolyline(LatLng userLocation) {
+    if (_routePolyline.isEmpty || _navigationDestination == null) return;
+
+    const distance = Distance();
+    final distToDestination = distance.as(
+      LengthUnit.Kilometer,
+      userLocation,
+      LatLng(
+        _navigationDestination!.latitude,
+        _navigationDestination!.longitude,
+      ),
+    );
+
+    // If very close to destination, stop navigation
+    if (distToDestination < 0.05) {
+      setState(() {
+        _isNavigating = false;
+        _routePolyline = [];
+        _navigationDestination = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Destination reached!')),
+      );
+      return;
+    }
+
+    // Find closest point on polyline and remove already walked portion
+    final result = RoutingService.findClosestPointAndRemovePath(
+      _routePolyline,
+      userLocation,
+    );
+
+    if (mounted) {
+      setState(() {
+        _routePolyline = result.value;
+      });
+    }
+  }
+
+  void _stopNavigation() {
+    setState(() {
+      _isNavigating = false;
+      _routePolyline = [];
+      _navigationDestination = null;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Navigation stopped')),
+    );
   }
 
   void _openProfileSheet(BuildContext context) {
