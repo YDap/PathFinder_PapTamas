@@ -37,6 +37,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Set<String> _selectedCategories = {};
   int? _minElevation;
   int? _maxElevation;
+  double? _maxDistanceKm; // null = no limit
   bool _showAllLocations = false; // Hidden by default
 
   // All available categories
@@ -97,10 +98,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 selectedCategories: _selectedCategories,
                 minElevation: _minElevation,
                 maxElevation: _maxElevation,
+                maxDistanceKm: _maxDistanceKm,
+                currentLocation: _currentLatLng,
                 showLocations: _showAllLocations ||
                     _selectedCategories.isNotEmpty ||
                     _minElevation != null ||
-                    _maxElevation != null,
+                    _maxElevation != null ||
+                    _maxDistanceKm != null,
               ),
               if (_currentLatLng != null)
                 MarkerLayer(
@@ -556,6 +560,37 @@ class _HomeScreenState extends State<HomeScreen> {
                             .textTheme
                             .bodySmall
                             ?.copyWith(color: cs.onSurfaceVariant),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Distance filter
+                      Text(
+                        'Max distance (km)',
+                        style: Theme.of(ctx)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 6),
+                      TextField(
+                        decoration: InputDecoration(
+                          labelText: 'Radius from current location',
+                          hintText: 'e.g. 10',
+                          suffixText: 'km',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        keyboardType: TextInputType.number,
+                        onChanged: (v) {
+                          setState(() {
+                            _maxDistanceKm =
+                                double.tryParse(v.replaceAll(',', '.'));
+                          });
+                        },
+                        controller: TextEditingController(
+                          text: _maxDistanceKm?.toString() ?? '',
+                        ),
                       ),
                       const SizedBox(height: 12),
 
