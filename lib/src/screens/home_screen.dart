@@ -30,12 +30,12 @@ class _HomeScreenState extends State<HomeScreen> {
   // final PlacesApi _placesApi =
   //     const PlacesApi(baseUrl: 'http://<YOUR_PC_IP>:3000');
 
-  LatLng _initialCenter = const LatLng(45.9432, 24.9668);
-  double _initialZoom = 6.5;
+  final LatLng _initialCenter = const LatLng(45.9432, 24.9668);
+  final double _initialZoom = 6.5;
   LatLng? _currentLatLng;
 
   // Filter state
-  Set<String> _selectedCategories = {};
+  final Set<String> _selectedCategories = {};
   int? _minElevation;
   int? _maxElevation;
   double? _maxDistanceKm;
@@ -61,6 +61,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<LatLng> _routePolyline = [];
   bool _isNavigating = false;
   double _distanceToDestination = 0;
+  double _totalRouteDistance = 0;
 
   @override
   void initState() {
@@ -302,10 +303,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           borderRadius: BorderRadius.circular(8),
                           child: LinearProgressIndicator(
                             value: (_navigationDestination != null &&
-                                    _distanceToDestination > 0)
-                                ? (1 -
-                                        (_distanceToDestination /
-                                            (_distanceToDestination + 0.5)))
+                                    _totalRouteDistance > 0)
+                                ? ((_totalRouteDistance -
+                                            _distanceToDestination) /
+                                        _totalRouteDistance)
                                     .clamp(0, 1)
                                 : 0,
                             minHeight: 8,
@@ -410,14 +411,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       final routingService = RoutingService();
-      final polyline = await routingService.getRoute(
+      final routeData = await routingService.getRoute(
         _currentLatLng!,
         LatLng(destination.latitude, destination.longitude),
       );
 
       if (mounted) {
         setState(() {
-          _routePolyline = polyline;
+          _routePolyline = routeData.polyline;
+          _totalRouteDistance = routeData.distance / 1000; // Convert to km
+          _distanceToDestination = _totalRouteDistance;
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -482,6 +485,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _routePolyline = [];
         _navigationDestination = null;
         _distanceToDestination = 0;
+        _totalRouteDistance = 0;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Destination reached!')),
@@ -495,10 +499,15 @@ class _HomeScreenState extends State<HomeScreen> {
       userLocation,
     );
 
+    // Calculate remaining distance along the route
+    final remainingDistance =
+        RoutingService.calculatePolylineDistance(result.value) /
+            1000; // Convert to km
+
     if (mounted) {
       setState(() {
         _routePolyline = result.value;
-        _distanceToDestination = distToDestination;
+        _distanceToDestination = remainingDistance;
       });
     }
   }
@@ -509,6 +518,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _routePolyline = [];
       _navigationDestination = null;
       _distanceToDestination = 0;
+      _totalRouteDistance = 0;
     });
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Navigation stopped')),
@@ -751,11 +761,11 @@ class _HomeScreenState extends State<HomeScreen> {
                                 value: _showAllLocations,
                                 onChanged: (value) {
                                   setState(() {
-                                    this._showAllLocations = value;
+                                    _showAllLocations = value;
                                   });
                                   this.setState(() {});
                                 },
-                                activeColor: cs.primary,
+                                activeThumbColor: cs.primary,
                               ),
                             ],
                           ),
@@ -1055,7 +1065,7 @@ class _HomeScreenState extends State<HomeScreen> {
 // ----------------------------------------------------------
 
 class _CurrentLocationIndicator extends StatefulWidget {
-  const _CurrentLocationIndicator({Key? key}) : super(key: key);
+  const _CurrentLocationIndicator({super.key});
 
   @override
   State<_CurrentLocationIndicator> createState() =>

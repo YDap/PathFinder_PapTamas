@@ -2,14 +2,21 @@ import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'dart:convert';
 
+class RouteData {
+  final List<LatLng> polyline;
+  final double distance; // in meters
+
+  RouteData({required this.polyline, required this.distance});
+}
+
 class RoutingService {
   // Using OSRM (Open Source Routing Machine) public API
   static const String osrmBase =
       'https://router.project-osrm.org/route/v1/driving';
 
-  /// Fetch route coordinates from OSRM API between two locations
-  /// Returns a list of LatLng points representing the route
-  Future<List<LatLng>> getRoute(LatLng start, LatLng end) async {
+  /// Fetch route data from OSRM API between two locations
+  /// Returns RouteData containing polyline and distance
+  Future<RouteData> getRoute(LatLng start, LatLng end) async {
     try {
       final url =
           '$osrmBase/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?geometries=geojson&overview=full';
@@ -29,10 +36,13 @@ class RoutingService {
         final firstRoute = routes[0];
         final geometry = firstRoute['geometry'] as Map;
         final coordinates = geometry['coordinates'] as List;
+        final distance = firstRoute['distance'] as double;
 
-        return coordinates.map((coord) {
+        final polyline = coordinates.map((coord) {
           return LatLng(coord[1] as double, coord[0] as double);
         }).toList();
+
+        return RouteData(polyline: polyline, distance: distance);
       } else {
         throw Exception('Failed to fetch route: ${response.statusCode}');
       }
@@ -45,6 +55,17 @@ class RoutingService {
   static double calculateDistance(LatLng start, LatLng end) {
     const distance = Distance();
     return distance.as(LengthUnit.Meter, start, end);
+  }
+
+  /// Calculate total distance along a polyline in meters
+  static double calculatePolylineDistance(List<LatLng> polyline) {
+    if (polyline.length < 2) return 0.0;
+
+    double totalDistance = 0.0;
+    for (int i = 0; i < polyline.length - 1; i++) {
+      totalDistance += calculateDistance(polyline[i], polyline[i + 1]);
+    }
+    return totalDistance;
   }
 
   /// Find the closest point on a polyline to a given location
