@@ -75,7 +75,6 @@ class _PlacesLayerState extends State<PlacesLayer> {
   Future<void> _loadNow() async {
     try {
       final bounds = widget.mapController.camera.visibleBounds;
-      if (bounds == null) return;
 
       final sw = bounds.southWest;
       final ne = bounds.northEast;
@@ -123,6 +122,27 @@ class _PlacesLayerState extends State<PlacesLayer> {
         return Colors.indigo;
       default:
         return Colors.orange;
+    }
+  }
+
+  IconData _iconFor(String category) {
+    switch (category.toLowerCase()) {
+      case 'lake':
+        return Icons.pool; // Water body icon
+      case 'cave':
+      case 'caves':
+        return Icons.terrain; // Cave/terrain icon
+      case 'ruin':
+      case 'ruins':
+        return Icons.account_balance; // Historical/ruins icon
+      case 'peak':
+        return Icons.landscape; // Mountain peak icon
+      case 'spring':
+        return Icons.water_drop; // Water spring icon
+      case 'viewpoint':
+        return Icons.visibility; // Viewpoint icon
+      default:
+        return Icons.place; // Generic location icon
     }
   }
 
@@ -181,7 +201,7 @@ class _PlacesLayerState extends State<PlacesLayer> {
                     parts.add(
                         '${p.latitude.toStringAsFixed(5)}, ${p.longitude.toStringAsFixed(5)}');
                     if (widget.currentLocation != null) {
-                      final dist = Distance().as(
+                      final dist = const Distance().as(
                           LengthUnit.Kilometer,
                           widget.currentLocation!,
                           LatLng(p.latitude, p.longitude));
@@ -303,7 +323,7 @@ class _PlacesLayerState extends State<PlacesLayer> {
 
       // Distance filter
       if (widget.maxDistanceKm != null && widget.currentLocation != null) {
-        final dist = Distance().as(LengthUnit.Kilometer,
+        final dist = const Distance().as(LengthUnit.Kilometer,
             widget.currentLocation!, LatLng(p.latitude, p.longitude));
         if (dist > widget.maxDistanceKm!) {
           return false;
@@ -328,10 +348,11 @@ class _PlacesLayerState extends State<PlacesLayer> {
     final markers = filteredPlaces.map((p) {
       final isSelected = _selected?.id == p.id;
       final color = _colorFor(p.category);
+      final icon = _iconFor(p.category);
       return Marker(
         point: LatLng(p.latitude, p.longitude),
-        width: isSelected ? 34 : 28,
-        height: isSelected ? 34 : 28,
+        width: isSelected ? 40 : 32,
+        height: isSelected ? 40 : 32,
         child: GestureDetector(
           onTap: () => _openPlaceSheet(p),
           child: Tooltip(
@@ -346,6 +367,11 @@ class _PlacesLayerState extends State<PlacesLayer> {
                 boxShadow: const [
                   BoxShadow(blurRadius: 4, color: Colors.black26)
                 ],
+              ),
+              child: Icon(
+                icon,
+                color: Colors.white,
+                size: isSelected ? 20 : 16,
               ),
             ),
           ),
@@ -379,7 +405,7 @@ class _LoadingChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Chip(
-      label: Row(mainAxisSize: MainAxisSize.min, children: const [
+      label: const Row(mainAxisSize: MainAxisSize.min, children: [
         SizedBox(
             width: 14,
             height: 14,
