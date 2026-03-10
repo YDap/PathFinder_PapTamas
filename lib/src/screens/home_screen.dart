@@ -9,6 +9,7 @@ import '../services/sos_service.dart';
 import '../services/routing_service.dart';
 import '../widgets/places_layer.dart';
 import '../services/auth_service.dart';
+import '../app.dart';
 import 'login_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -97,8 +98,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             children: [
               TileLayer(
-                urlTemplate:
-                    'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+                urlTemplate: Theme.of(context).brightness == Brightness.dark
+                    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+                    : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
                 subdomains: const ['a', 'b', 'c', 'd'],
                 userAgentPackageName: 'com.example.pathfinder_app',
               ),
@@ -636,6 +638,25 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                   const SizedBox(height: 20),
+                  const Divider(height: 24),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      Theme.of(ctx).brightness == Brightness.dark
+                          ? Icons.light_mode_rounded
+                          : Icons.dark_mode_rounded,
+                      color: cs.primary,
+                    ),
+                    title: Text(
+                      Theme.of(ctx).brightness == Brightness.dark
+                          ? 'Switch to Light Mode'
+                          : 'Switch to Dark Mode',
+                    ),
+                    onTap: () {
+                      PathfinderApp.of(context)?.toggleTheme();
+                      Navigator.of(ctx).pop();
+                    },
+                  ),
                   const Divider(height: 24),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
