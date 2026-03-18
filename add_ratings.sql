@@ -11,20 +11,17 @@ CREATE TABLE place_ratings (
 CREATE INDEX idx_place_ratings_place_id ON place_ratings(place_id);
 
 -- Update the view to include average rating
--- Assuming the current view is something like:
--- CREATE VIEW v_places_basic AS SELECT id, name, category, elevation_m, latitude, longitude FROM places;
-
 -- Drop and recreate the view with average rating
-DROP VIEW IF EXISTS v_places_basic;
+DROP VIEW IF EXISTS v_places_basic CASCADE;
 CREATE VIEW v_places_basic AS
 SELECT
     p.id,
     p.name,
     p.category,
     p.elevation_m,
-    p.latitude,
-    p.longitude,
+    st_y(p.geom) AS latitude,
+    st_x(p.geom) AS longitude,
     AVG(r.rating) AS average_rating
 FROM places p
 LEFT JOIN place_ratings r ON p.id = r.place_id
-GROUP BY p.id, p.name, p.category, p.elevation_m, p.latitude, p.longitude;
+GROUP BY p.id, p.name, p.category, p.elevation_m, p.geom;

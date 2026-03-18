@@ -198,6 +198,9 @@ class _PlacesLayerState extends State<PlacesLayer> {
                     final parts = <String>[];
                     if (p.category.isNotEmpty) parts.add(p.category);
                     if (p.elevationM != null) parts.add('${p.elevationM} m');
+                    if (p.averageRating != null) {
+                      parts.add('⭐ ${p.averageRating!.toStringAsFixed(1)}/5');
+                    }
                     parts.add(
                         '${p.latitude.toStringAsFixed(5)}, ${p.longitude.toStringAsFixed(5)}');
                     if (widget.currentLocation != null) {
@@ -210,30 +213,7 @@ class _PlacesLayerState extends State<PlacesLayer> {
                     return parts.join(' • ');
                   }(),
                 ),
-                trailing: p.averageRating != null
-                    ? Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: List.generate(5, (i) {
-                          final star = i + 1;
-                          return Icon(
-                            star <= p.averageRating!
-                                ? Icons.star
-                                : Icons.star_border,
-                            size: 16,
-                            color: Colors.amber,
-                          );
-                        }),
-                      )
-                    : null,
               ),
-              if (p.averageRating != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    'Rating: ${p.averageRating!.toStringAsFixed(1)} / 5',
-                    style: Theme.of(ctx).textTheme.bodySmall,
-                  ),
-                ),
               const SizedBox(height: 12),
               // Rating widget
               Text('Rate this place:',
@@ -247,12 +227,22 @@ class _PlacesLayerState extends State<PlacesLayer> {
                     onPressed: () async {
                       try {
                         await widget.api.ratePlace(p.id, rating);
-                        // Optionally reload to update average
-                        _loadNow();
                         if (mounted) {
                           ScaffoldMessenger.of(ctx).showSnackBar(
-                            SnackBar(content: Text('Rated $rating stars!')),
+                            SnackBar(
+                              content: Text(
+                                  '⭐ Rated $rating star${rating > 1 ? 's' : ''}!'),
+                              duration: const Duration(milliseconds: 1500),
+                            ),
                           );
+                          // Close the bottom sheet after rating
+                          Future.delayed(const Duration(milliseconds: 800), () {
+                            if (mounted) {
+                              Navigator.pop(ctx);
+                              // Reload to show updated average
+                              _loadNow();
+                            }
+                          });
                         }
                       } catch (e) {
                         if (mounted) {
@@ -263,7 +253,7 @@ class _PlacesLayerState extends State<PlacesLayer> {
                       }
                     },
                     icon: Icon(
-                      Icons.star_border,
+                      Icons.star,
                       color: Colors.amber,
                     ),
                     tooltip: 'Rate $rating star${rating > 1 ? 's' : ''}',
