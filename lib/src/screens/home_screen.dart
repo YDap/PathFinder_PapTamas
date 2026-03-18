@@ -3,12 +3,14 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../services/places_api.dart';
 import '../services/sos_service.dart';
 import '../services/routing_service.dart';
 import '../widgets/places_layer.dart';
 import '../services/auth_service.dart';
+import '../services/profile_service.dart';
 import '../app.dart';
 import 'login_screen.dart';
 
@@ -24,12 +26,12 @@ class _HomeScreenState extends State<HomeScreen> {
   final MapController _mapController = MapController();
 
   // USB + adb reverse esetere:
-  final PlacesApi _placesApi =
-      const PlacesApi(baseUrl: 'http://127.0.0.1:3000');
+  // final PlacesApi _placesApi =
+  //     const PlacesApi(baseUrl: 'http://127.0.0.1:3000');
 
   // Ha Wi-Fi/LAN modra allnal at, akkor hasznalj ilyesmit:
-  // final PlacesApi _placesApi =
-  //     const PlacesApi(baseUrl: 'http://<YOUR_PC_IP>:3000');
+  final PlacesApi _placesApi =
+      const PlacesApi(baseUrl: 'http://10.163.12.113:3000');
 
   final LatLng _initialCenter = const LatLng(45.9432, 24.9668);
   final double _initialZoom = 6.5;
@@ -64,6 +66,10 @@ class _HomeScreenState extends State<HomeScreen> {
   double _distanceToDestination = 0;
   double _totalRouteDistance = 0;
 
+  // Profile state
+  final ProfileService _profileService = ProfileService();
+  String? _profileImageUrl;
+
   @override
   void initState() {
     super.initState();
@@ -71,6 +77,16 @@ class _HomeScreenState extends State<HomeScreen> {
     _maxElevationController = TextEditingController();
     _distanceController = TextEditingController();
     _ensureLocationAndCenter(silent: true);
+    _loadProfileImage();
+  }
+
+  Future<void> _loadProfileImage() async {
+    final url = await _profileService.getProfileImageUrl();
+    if (mounted) {
+      setState(() {
+        _profileImageUrl = url;
+      });
+    }
   }
 
   @override
@@ -527,6 +543,56 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Future<void> _changeProfilePicture() async {
+    final source = await showDialog<ImageSource>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Choose Image Source'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Camera'),
+              onTap: () => Navigator.of(ctx).pop(ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Gallery'),
+              onTap: () => Navigator.of(ctx).pop(ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (source != null) {
+      final imageFile = await _profileService.pickImage(source);
+      if (imageFile != null) {
+        // Show loading indicator
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Uploading profile picture...')),
+          );
+        }
+
+        final downloadUrl = await _profileService.uploadProfileImage(imageFile);
+        if (downloadUrl != null && mounted) {
+          setState(() {
+            _profileImageUrl = downloadUrl;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Profile picture updated!')),
+          );
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to upload profile picture')),
+          );
+        }
+      }
+    }
+  }
+
   void _openProfileSheet(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     final display = user?.displayName?.trim();
@@ -568,9 +634,17 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   Row(
                     children: [
-                      const CircleAvatar(
-                        radius: 32,
-                        child: Icon(Icons.person, size: 36),
+                      GestureDetector(
+                        onTap: _changeProfilePicture,
+                        child: CircleAvatar(
+                          radius: 32,
+                          backgroundImage: _profileImageUrl != null
+                              ? NetworkImage(_profileImageUrl!)
+                              : null,
+                          child: _profileImageUrl == null
+                              ? const Icon(Icons.person, size: 36)
+                              : null,
+                        ),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
@@ -594,6 +668,16 @@ class _HomeScreenState extends State<HomeScreen> {
                                         color: cs.onSurfaceVariant,
                                       ),
                               overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Tap avatar to change profile picture',
+                              style: Theme.of(ctx)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: cs.onSurfaceVariant.withOpacity(0.7),
+                                  ),
                             ),
                           ],
                         ),
@@ -664,6 +748,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     title: const Text('Log out'),
                     onTap: () async {
                       await auth.signOut();
+                      // Clear profile image cache on logout
+                      await _profileService.clearProfileImageUrl();
                       if (context.mounted) {
                         Navigator.of(context).pop();
                         Navigator.pushNamedAndRemoveUntil(
@@ -1086,7 +1172,7 @@ class _HomeScreenState extends State<HomeScreen> {
 // ----------------------------------------------------------
 
 class _CurrentLocationIndicator extends StatefulWidget {
-  const _CurrentLocationIndicator({super.key});
+  const _CurrentLocationIndicator();
 
   @override
   State<_CurrentLocationIndicator> createState() =>
