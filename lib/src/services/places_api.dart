@@ -11,6 +11,7 @@ class Place {
   final int? elevationM;
   final double latitude;
   final double longitude;
+  final double? averageRating;
 
   const Place({
     required this.id,
@@ -19,6 +20,7 @@ class Place {
     required this.latitude,
     required this.longitude,
     this.elevationM,
+    this.averageRating,
   });
 
   factory Place.fromJson(Map<String, dynamic> j) {
@@ -31,6 +33,9 @@ class Place {
           : int.tryParse(j['elevation_m'].toString()),
       latitude: (j['latitude'] as num).toDouble(),
       longitude: (j['longitude'] as num).toDouble(),
+      averageRating: j['average_rating'] == null
+          ? null
+          : (j['average_rating'] as num).toDouble(),
     );
   }
 }
@@ -88,6 +93,35 @@ class PlacesApi {
           'OR ensure Wi-Fi allows phone→PC on port 3000. $e');
     } on SocketException catch (e) {
       throw Exception('Network error to $baseUrl: ${e.message}');
+    }
+  }
+
+  Future<void> ratePlace(String placeId, int rating, {String? userId}) async {
+    final uri = Uri.parse('$baseUrl/place_ratings');
+    final body = {
+      'place_id': placeId,
+      'rating': rating,
+      if (userId != null) 'user_id': userId,
+    };
+
+    try {
+      final res = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode(body),
+          )
+          .timeout(const Duration(seconds: 8));
+
+      if (res.statusCode != 201) {
+        throw Exception(
+            'Failed to submit rating: HTTP ${res.statusCode}: ${res.body}');
+      }
+    } on TimeoutException catch (e) {
+      throw Exception('Timeout submitting rating to $baseUrl. $e');
+    } on SocketException catch (e) {
+      throw Exception(
+          'Network error submitting rating to $baseUrl: ${e.message}');
     }
   }
 }

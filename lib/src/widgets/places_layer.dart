@@ -210,6 +210,65 @@ class _PlacesLayerState extends State<PlacesLayer> {
                     return parts.join(' • ');
                   }(),
                 ),
+                trailing: p.averageRating != null
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: List.generate(5, (i) {
+                          final star = i + 1;
+                          return Icon(
+                            star <= p.averageRating!
+                                ? Icons.star
+                                : Icons.star_border,
+                            size: 16,
+                            color: Colors.amber,
+                          );
+                        }),
+                      )
+                    : null,
+              ),
+              if (p.averageRating != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    'Rating: ${p.averageRating!.toStringAsFixed(1)} / 5',
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
+                ),
+              const SizedBox(height: 12),
+              // Rating widget
+              Text('Rate this place:',
+                  style: Theme.of(ctx).textTheme.bodyMedium),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(5, (i) {
+                  final rating = i + 1;
+                  return IconButton(
+                    onPressed: () async {
+                      try {
+                        await widget.api.ratePlace(p.id, rating);
+                        // Optionally reload to update average
+                        _loadNow();
+                        if (mounted) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            SnackBar(content: Text('Rated $rating stars!')),
+                          );
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            SnackBar(content: Text('Failed to rate: $e')),
+                          );
+                        }
+                      }
+                    },
+                    icon: Icon(
+                      Icons.star_border,
+                      color: Colors.amber,
+                    ),
+                    tooltip: 'Rate $rating star${rating > 1 ? 's' : ''}',
+                  );
+                }),
               ),
               const SizedBox(height: 8),
               Row(
