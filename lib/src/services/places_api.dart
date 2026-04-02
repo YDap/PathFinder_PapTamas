@@ -1,9 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 
+// ─────────────────────────────────────────────────────────────
+// Place model
+// ─────────────────────────────────────────────────────────────
 class Place {
   final String id;
   final String name;
@@ -12,6 +16,10 @@ class Place {
   final double latitude;
   final double longitude;
   final double? averageRating;
+  final int ratingCount;
+  final String? description;
+  final dynamic images;
+  final Map<String, dynamic>? tags;
 
   const Place({
     required this.id,
@@ -21,6 +29,10 @@ class Place {
     required this.longitude,
     this.elevationM,
     this.averageRating,
+    this.ratingCount = 0,
+    this.description,
+    this.images,
+    this.tags,
   });
 
   factory Place.fromJson(Map<String, dynamic> j) {
@@ -33,95 +45,158 @@ class Place {
           : int.tryParse(j['elevation_m'].toString()),
       latitude: (j['latitude'] as num).toDouble(),
       longitude: (j['longitude'] as num).toDouble(),
-      averageRating: j['average_rating'] == null
+      averageRating: j['avg_rating'] == null
           ? null
-          : (j['average_rating'] as num).toDouble(),
+          : double.tryParse(j['avg_rating'].toString()),
+      ratingCount: j['rating_count'] == null
+          ? 0
+          : int.tryParse(j['rating_count'].toString()) ?? 0,
+      description: j['description']?.toString(),
+      images: j['images'],
+      tags: j['tags'] != null ? Map<String, dynamic>.from(j['tags']) : null,
     );
   }
 }
 
-/// Queries the *view* via PostgREST with a single AND-composite filter.
-/// Example: and=(latitude.gte.45,latitude.lte.46,longitude.gte.23,longitude.lte.25)&limit=1000
+// ─────────────────────────────────────────────────────────────
+// PlacesApi
+// ─────────────────────────────────────────────────────────────
 class PlacesApi {
   final String baseUrl;
   const PlacesApi({required this.baseUrl});
 
+  Future<String> _getToken() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw Exception('User is not logged in');
+    final token = await user.getIdToken();
+    if (token == null) throw Exception('Could not retrieve auth token');
+    return token;
+  }
+
+  Map<String, String> get _jsonHeaders => {
+        'Content-Type': 'application/json',
+      };
+
+  Future<Map<String, String>> _authHeaders() async {
+    final token = await _getToken();
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+    };
+  }
+
+  List<Place> _parsePlaceList(http.Response res) {
+    if (res.statusCode != 200) {
+      throw Exception('HTTP ${res.statusCode}: ${res.body}');
+    }
+    final List decoded = json.decode(res.body) as List;
+    return decoded
+        .map((e) => Place.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// GET /places?lat=&lng=&radius=
   Future<List<Place>> fetchInBounds({
     required LatLng southWest,
     required LatLng northEast,
     int limit = 1000,
   }) async {
-    // Normalize bounds (in case they arrive inverted)
-    final minLat = southWest.latitude < northEast.latitude
-        ? southWest.latitude
-        : northEast.latitude;
-    final maxLat = southWest.latitude < northEast.latitude
-        ? northEast.latitude
-        : southWest.latitude;
-    final minLon = southWest.longitude < northEast.longitude
-        ? southWest.longitude
-        : northEast.longitude;
-    final maxLon = southWest.longitude < northEast.longitude
-        ? northEast.longitude
-        : southWest.longitude;
+    final centerLat = (southWest.latitude + northEast.latitude) / 2;
+    final centerLng = (southWest.longitude + northEast.longitude) / 2;
+    final radius =
+        ((northEast.latitude - southWest.latitude) / 2).abs().clamp(0.01, 5.0);
 
-    final andValue = '(${[
-      'latitude.gte.${minLat.toStringAsFixed(6)}',
-      'latitude.lte.${maxLat.toStringAsFixed(6)}',
-      'longitude.gte.${minLon.toStringAsFixed(6)}',
-      'longitude.lte.${maxLon.toStringAsFixed(6)}',
-    ].join(',')})';
-
-    // Let Uri handle the encoding of () , .
-    final uri = Uri.parse('$baseUrl/v_places_basic')
-        .replace(queryParameters: {'and': andValue, 'limit': '$limit'});
+    final uri = Uri.parse('$baseUrl/places').replace(queryParameters: {
+      'lat': centerLat.toStringAsFixed(6),
+      'lng': centerLng.toStringAsFixed(6),
+      'radius': radius.toStringAsFixed(6),
+    });
 
     try {
-      final res = await http.get(uri).timeout(const Duration(seconds: 8));
+      final res = await http
+          .get(uri, headers: _jsonHeaders)
+          .timeout(const Duration(seconds: 10));
 
-      if (res.statusCode != 200) {
-        throw Exception('HTTP ${res.statusCode}: ${res.body}');
-      }
-
-      final List decoded = json.decode(res.body) as List;
-      return decoded
-          .map((e) => Place.fromJson(e as Map<String, dynamic>))
-          .toList();
-    } on TimeoutException catch (e) {
-      throw Exception(
-          'Timeout reaching $baseUrl. If running on a real phone, use USB + "adb reverse tcp:3000 tcp:3000" '
-          'OR ensure Wi-Fi allows phone→PC on port 3000. $e');
+      return _parsePlaceList(res);
+    } on TimeoutException {
+      throw Exception('Timeout reaching $baseUrl. '
+          'Make sure adb reverse tcp:3000 tcp:3000 is running.');
     } on SocketException catch (e) {
       throw Exception('Network error to $baseUrl: ${e.message}');
     }
   }
 
-  Future<void> ratePlace(String placeId, int rating, {String? userId}) async {
-    final uri = Uri.parse('$baseUrl/place_ratings');
-    final body = {
-      'place_id': placeId,
-      'rating': rating,
-      if (userId != null) 'user_id': userId,
-    };
-
+  /// GET /places/search?q=
+  Future<List<Place>> searchPlaces(String query) async {
+    final uri = Uri.parse('$baseUrl/places/search')
+        .replace(queryParameters: {'q': query});
     try {
+      final res = await http
+          .get(uri, headers: _jsonHeaders)
+          .timeout(const Duration(seconds: 10));
+      return _parsePlaceList(res);
+    } on TimeoutException {
+      throw Exception('Timeout searching places');
+    } on SocketException catch (e) {
+      throw Exception('Network error: ${e.message}');
+    }
+  }
+
+  /// GET /places/:id
+  Future<Place> fetchPlaceById(String id) async {
+    final uri = Uri.parse('$baseUrl/places/$id');
+    try {
+      final res = await http
+          .get(uri, headers: _jsonHeaders)
+          .timeout(const Duration(seconds: 10));
+      if (res.statusCode == 404) throw Exception('Place not found');
+      if (res.statusCode != 200) {
+        throw Exception('HTTP ${res.statusCode}: ${res.body}');
+      }
+      return Place.fromJson(json.decode(res.body) as Map<String, dynamic>);
+    } on TimeoutException {
+      throw Exception('Timeout fetching place');
+    } on SocketException catch (e) {
+      throw Exception('Network error: ${e.message}');
+    }
+  }
+
+  /// POST /places/:id/rate  (requires auth)
+  Future<void> ratePlace(String placeId, int rating) async {
+    final uri = Uri.parse('$baseUrl/places/$placeId/rate');
+    try {
+      final headers = await _authHeaders();
       final res = await http
           .post(
             uri,
-            headers: {'Content-Type': 'application/json'},
-            body: json.encode(body),
+            headers: headers,
+            body: json.encode({'rating': rating}),
           )
-          .timeout(const Duration(seconds: 8));
-
+          .timeout(const Duration(seconds: 10));
       if (res.statusCode != 201) {
-        throw Exception(
-            'Failed to submit rating: HTTP ${res.statusCode}: ${res.body}');
+        final body = json.decode(res.body);
+        throw Exception(body['error'] ?? 'Failed to submit rating');
       }
-    } on TimeoutException catch (e) {
-      throw Exception('Timeout submitting rating to $baseUrl. $e');
+    } on TimeoutException {
+      throw Exception('Timeout submitting rating');
     } on SocketException catch (e) {
-      throw Exception(
-          'Network error submitting rating to $baseUrl: ${e.message}');
+      throw Exception('Network error: ${e.message}');
+    }
+  }
+
+  /// GET /places/ratings/my  (requires auth)
+  Future<List<Place>> fetchMyRatings() async {
+    final uri = Uri.parse('$baseUrl/places/ratings/my');
+    try {
+      final headers = await _authHeaders();
+      final res = await http
+          .get(uri, headers: headers)
+          .timeout(const Duration(seconds: 10));
+      return _parsePlaceList(res);
+    } on TimeoutException {
+      throw Exception('Timeout fetching ratings');
+    } on SocketException catch (e) {
+      throw Exception('Network error: ${e.message}');
     }
   }
 }

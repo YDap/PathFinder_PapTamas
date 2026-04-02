@@ -249,7 +249,7 @@ class _PlacesLayerState extends State<PlacesLayer> {
                           ScaffoldMessenger.of(ctx).showSnackBar(
                             SnackBar(content: Text('Failed to rate: $e')),
                           );
-                        }
+                        } 
                       }
                     },
                     icon: Icon(

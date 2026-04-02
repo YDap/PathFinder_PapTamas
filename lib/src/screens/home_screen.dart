@@ -26,12 +26,8 @@ class _HomeScreenState extends State<HomeScreen> {
   final MapController _mapController = MapController();
 
   // USB + adb reverse esetere:
-  // final PlacesApi _placesApi =
-  //     const PlacesApi(baseUrl: 'http://127.0.0.1:3000');
-
-  // Ha Wi-Fi/LAN modra allnal at, akkor hasznalj ilyesmit:
   final PlacesApi _placesApi =
-      const PlacesApi(baseUrl: 'http://10.163.12.113:3000');
+      const PlacesApi(baseUrl: 'http://127.0.0.1:3001');
 
   final LatLng _initialCenter = const LatLng(45.9432, 24.9668);
   final double _initialZoom = 6.5;
