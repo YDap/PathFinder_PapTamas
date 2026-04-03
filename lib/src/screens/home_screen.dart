@@ -9,6 +9,7 @@ import '../services/places_api.dart';
 import '../services/sos_service.dart';
 import '../services/routing_service.dart';
 import '../widgets/places_layer.dart';
+import '../widgets/ai_chat_sheet.dart';
 import '../services/auth_service.dart';
 import '../services/profile_service.dart';
 import '../app.dart';
@@ -186,6 +187,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       icon: const Icon(Icons.tune_rounded),
                     ),
                   ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: IconButton.filledTonal(
+                      tooltip: 'AI Assistant',
+                      onPressed: () => _openAiChatSheet(context),
+                      icon: const Icon(Icons.auto_awesome_rounded),
+                    ),
+                  ),
                   IconButton.filled(
                     tooltip: 'Profile',
                     onPressed: () => _openProfileSheet(context),
@@ -351,6 +360,27 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  void _openAiChatSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => AiChatSheet(
+        api: _placesApi,
+        currentLocation: _currentLatLng,
+        onShowOnMap: (place) {
+          _mapController.move(
+            LatLng(place.latitude, place.longitude),
+            14,
+          );
+        },
       ),
     );
   }

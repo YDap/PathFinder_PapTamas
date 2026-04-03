@@ -20,6 +20,7 @@ class Place {
   final String? description;
   final dynamic images;
   final Map<String, dynamic>? tags;
+  final double? distanceKm;
 
   const Place({
     required this.id,
@@ -33,6 +34,7 @@ class Place {
     this.description,
     this.images,
     this.tags,
+    this.distanceKm,
   });
 
   factory Place.fromJson(Map<String, dynamic> j) {
@@ -54,6 +56,28 @@ class Place {
       description: j['description']?.toString(),
       images: j['images'],
       tags: j['tags'] != null ? Map<String, dynamic>.from(j['tags']) : null,
+      distanceKm: j['distance_km'] == null
+          ? null
+          : double.tryParse(j['distance_km'].toString()),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// AiQueryResult model
+// ─────────────────────────────────────────────────────────────
+class AiQueryResult {
+  final String message;
+  final List<Place> places;
+
+  const AiQueryResult({required this.message, required this.places});
+
+  factory AiQueryResult.fromJson(Map<String, dynamic> j) {
+    return AiQueryResult(
+      message: (j['message'] ?? '').toString(),
+      places: (j['places'] as List? ?? [])
+          .map((e) => Place.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
   }
 }
@@ -179,6 +203,34 @@ class PlacesApi {
       }
     } on TimeoutException {
       throw Exception('Timeout submitting rating');
+    } on SocketException catch (e) {
+      throw Exception('Network error: ${e.message}');
+    }
+  }
+
+  /// POST /ai/query — natural language place search
+  Future<AiQueryResult> queryAI({
+    required String message,
+    required double lat,
+    required double lng,
+  }) async {
+    final uri = Uri.parse('$baseUrl/ai/query');
+    try {
+      final res = await http
+          .post(
+            uri,
+            headers: _jsonHeaders,
+            body: json.encode({'message': message, 'lat': lat, 'lng': lng}),
+          )
+          .timeout(const Duration(seconds: 20));
+      if (res.statusCode != 200) {
+        final body = json.decode(res.body) as Map<String, dynamic>;
+        throw Exception(body['error'] ?? 'AI query failed');
+      }
+      return AiQueryResult.fromJson(
+          json.decode(res.body) as Map<String, dynamic>);
+    } on TimeoutException {
+      throw Exception('AI query timed out — Gemini may be slow, try again');
     } on SocketException catch (e) {
       throw Exception('Network error: ${e.message}');
     }
