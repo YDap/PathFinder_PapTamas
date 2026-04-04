@@ -1154,7 +1154,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               if (_minElevation != null ||
                                   _maxElevation != null)
                                 Text(
-                                  '💡 Note: Places without elevation data will always be shown.',
+                                  'Note: Places with no data about their height will not appear on the map.',
                                   style: Theme.of(ctx)
                                       .textTheme
                                       .bodySmall

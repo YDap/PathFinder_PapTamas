@@ -379,14 +379,14 @@ class _PlacesLayerState extends State<PlacesLayer> {
         }
       }
 
-      // Apply elevation filters if specified
-      if (widget.minElevation != null && p.elevationM != null) {
-        if (p.elevationM! < widget.minElevation!) {
+      // Apply elevation filters — places with no elevation data are excluded
+      if (widget.minElevation != null) {
+        if (p.elevationM == null || p.elevationM! < widget.minElevation!) {
           return false;
         }
       }
-      if (widget.maxElevation != null && p.elevationM != null) {
-        if (p.elevationM! > widget.maxElevation!) {
+      if (widget.maxElevation != null) {
+        if (p.elevationM == null || p.elevationM! > widget.maxElevation!) {
           return false;
         }
       }
