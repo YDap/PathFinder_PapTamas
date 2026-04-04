@@ -222,7 +222,7 @@ class PlacesApi {
             headers: _jsonHeaders,
             body: json.encode({'message': message, 'lat': lat, 'lng': lng}),
           )
-          .timeout(const Duration(seconds: 20));
+          .timeout(const Duration(seconds: 45));
       if (res.statusCode != 200) {
         final body = json.decode(res.body) as Map<String, dynamic>;
         throw Exception(body['error'] ?? 'AI query failed');
@@ -230,7 +230,7 @@ class PlacesApi {
       return AiQueryResult.fromJson(
           json.decode(res.body) as Map<String, dynamic>);
     } on TimeoutException {
-      throw Exception('AI query timed out — Gemini may be slow, try again');
+      throw Exception('AI query timed out. Please try again.');
     } on SocketException catch (e) {
       throw Exception('Network error: ${e.message}');
     }
