@@ -64,6 +64,41 @@ class Place {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Post model
+// ─────────────────────────────────────────────────────────────
+class Post {
+  final int id;
+  final String placeId;
+  final String userId;
+  final String username;
+  final String content;
+  final String? imageUrl;
+  final DateTime createdAt;
+
+  const Post({
+    required this.id,
+    required this.placeId,
+    required this.userId,
+    required this.username,
+    required this.content,
+    this.imageUrl,
+    required this.createdAt,
+  });
+
+  factory Post.fromJson(Map<String, dynamic> j) {
+    return Post(
+      id: j['id'] as int,
+      placeId: j['place_id'].toString(),
+      userId: j['user_id'].toString(),
+      username: j['username']?.toString() ?? 'Anonymous',
+      content: j['content'].toString(),
+      imageUrl: j['image_url']?.toString(),
+      createdAt: DateTime.parse(j['created_at'].toString()),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
 // AiQueryResult model
 // ─────────────────────────────────────────────────────────────
 class AiQueryResult {
@@ -247,6 +282,61 @@ class PlacesApi {
       return _parsePlaceList(res);
     } on TimeoutException {
       throw Exception('Timeout fetching ratings');
+    } on SocketException catch (e) {
+      throw Exception('Network error: ${e.message}');
+    }
+  }
+
+  /// GET /posts?place_id=X
+  Future<List<Post>> fetchPosts(String placeId) async {
+    final uri = Uri.parse('$baseUrl/posts')
+        .replace(queryParameters: {'place_id': placeId});
+    try {
+      final res = await http
+          .get(uri, headers: _jsonHeaders)
+          .timeout(const Duration(seconds: 10));
+      if (res.statusCode != 200) {
+        throw Exception('HTTP ${res.statusCode}: ${res.body}');
+      }
+      final List decoded = json.decode(res.body) as List;
+      return decoded
+          .map((e) => Post.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } on TimeoutException {
+      throw Exception('Timeout fetching posts');
+    } on SocketException catch (e) {
+      throw Exception('Network error: ${e.message}');
+    }
+  }
+
+  /// POST /posts  (multipart, requires auth)
+  Future<Post> createPost({
+    required String placeId,
+    required String content,
+    File? image,
+  }) async {
+    final uri = Uri.parse('$baseUrl/posts');
+    try {
+      final token = await _getToken();
+      final request = http.MultipartRequest('POST', uri)
+        ..headers['Authorization'] = 'Bearer $token'
+        ..fields['place_id'] = placeId
+        ..fields['content'] = content;
+
+      if (image != null) {
+        request.files.add(await http.MultipartFile.fromPath('image', image.path));
+      }
+
+      final streamed = await request.send().timeout(const Duration(seconds: 30));
+      final res = await http.Response.fromStream(streamed);
+
+      if (res.statusCode != 201) {
+        final body = json.decode(res.body) as Map<String, dynamic>;
+        throw Exception(body['error'] ?? 'Failed to create post');
+      }
+      return Post.fromJson(json.decode(res.body) as Map<String, dynamic>);
+    } on TimeoutException {
+      throw Exception('Timeout creating post');
     } on SocketException catch (e) {
       throw Exception('Network error: ${e.message}');
     }
