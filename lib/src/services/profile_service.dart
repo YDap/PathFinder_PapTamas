@@ -1,15 +1,24 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ProfileService {
   static const String _profileImageUrlKey = 'profile_image_url';
+  final String baseUrl;
+
+  ProfileService({this.baseUrl = 'http://127.0.0.1:3001'});
 
   final ImagePicker _imagePicker = ImagePicker();
-  final FirebaseStorage _storage = FirebaseStorage.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  Future<String?> _getToken() async {
+    final user = _auth.currentUser;
+    if (user == null) return null;
+    return await user.getIdToken();
+  }
 
   /// Pick an image from gallery or camera
   Future<File?> pickImage(ImageSource source) async {
@@ -20,83 +29,85 @@ class ProfileService {
         maxHeight: 512,
         imageQuality: 85,
       );
-
-      if (pickedFile != null) {
-        return File(pickedFile.path);
-      }
+      if (pickedFile != null) return File(pickedFile.path);
     } catch (e) {
       print('Error picking image: $e');
     }
     return null;
   }
 
-  /// Upload image to Firebase Storage and return download URL
-  Future<String?> uploadProfileImage(File imageFile) async {
+  /// Upload profile image to backend and return the full download URL.
+  /// Throws a descriptive [Exception] on failure.
+  Future<String> uploadProfileImage(File imageFile) async {
+    final token = await _getToken();
+    if (token == null) throw Exception('Not logged in');
+
+    final uri = Uri.parse('$baseUrl/users/profile-image');
+    final request = http.MultipartRequest('POST', uri)
+      ..headers['Authorization'] = 'Bearer $token'
+      ..files.add(await http.MultipartFile.fromPath('image', imageFile.path));
+
+    final streamed = await request.send().timeout(const Duration(seconds: 30));
+    final res = await http.Response.fromStream(streamed);
+
+    if (res.statusCode != 200) {
+      String detail = '';
+      try {
+        final body = json.decode(res.body) as Map<String, dynamic>;
+        detail = body['error']?.toString() ?? '';
+      } catch (_) {}
+      throw Exception(
+          'Server error ${res.statusCode}${detail.isNotEmpty ? ": $detail" : ""}');
+    }
+
+    final body = json.decode(res.body) as Map<String, dynamic>;
+    final relativePath = body['profile_image_url'] as String?;
+    if (relativePath == null) throw Exception('Server returned no image URL');
+
+    final downloadUrl = '$baseUrl$relativePath';
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_profileImageUrlKey, downloadUrl);
+
+    return downloadUrl;
+  }
+
+  /// Get profile image URL — tries cache first, then fetches from backend
+  Future<String?> getProfileImageUrl() async {
+    // Return cached value immediately if available
+    final prefs = await SharedPreferences.getInstance();
+    final cached = prefs.getString(_profileImageUrlKey);
+    if (cached != null) return cached;
+
+    // Otherwise fetch from backend
     try {
-      final user = _auth.currentUser;
-      if (user == null) return null;
+      final token = await _getToken();
+      if (token == null) return null;
 
-      // Create a unique filename
-      final fileName =
-          '${user.uid}_profile_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final storageRef = _storage.ref().child('profile_images/$fileName');
+      final uri = Uri.parse('$baseUrl/users/profile-image');
+      final res = await http.get(
+        uri,
+        headers: {'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 10));
 
-      // Upload the file
-      final uploadTask = storageRef.putFile(
-        imageFile,
-        SettableMetadata(contentType: 'image/jpeg'),
-      );
+      if (res.statusCode != 200) return null;
 
-      // Wait for upload to complete
-      final snapshot = await uploadTask.whenComplete(() {});
-      final downloadUrl = await snapshot.ref.getDownloadURL();
+      final body = json.decode(res.body) as Map<String, dynamic>;
+      final relativePath = body['profile_image_url'] as String?;
+      if (relativePath == null) return null;
 
-      // Save URL locally for caching
-      final prefs = await SharedPreferences.getInstance();
+      final downloadUrl = '$baseUrl$relativePath';
       await prefs.setString(_profileImageUrlKey, downloadUrl);
-
       return downloadUrl;
     } catch (e) {
-      print('Error uploading profile image: $e');
+      print('Error fetching profile image: $e');
       return null;
     }
   }
 
-  /// Get cached profile image URL
-  Future<String?> getProfileImageUrl() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_profileImageUrlKey);
-  }
-
-  /// Clear cached profile image URL
+  /// Clear cached profile image URL (call on logout)
   Future<void> clearProfileImageUrl() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_profileImageUrlKey);
-  }
-
-  /// Delete profile image from Firebase Storage
-  Future<void> deleteProfileImage() async {
-    try {
-      final user = _auth.currentUser;
-      if (user == null) return;
-
-      // Get current image URL to extract the path
-      final currentUrl = await getProfileImageUrl();
-      if (currentUrl != null) {
-        // Extract the path from the Firebase Storage URL
-        final uri = Uri.parse(currentUrl);
-        final pathSegments = uri.pathSegments;
-        if (pathSegments.length >= 2) {
-          final imagePath =
-              '${pathSegments[pathSegments.length - 2]}/${pathSegments.last}';
-          await _storage.ref().child(imagePath).delete();
-        }
-      }
-
-      // Clear local cache
-      await clearProfileImageUrl();
-    } catch (e) {
-      print('Error deleting profile image: $e');
-    }
   }
 }

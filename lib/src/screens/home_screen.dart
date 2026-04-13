@@ -64,7 +64,8 @@ class _HomeScreenState extends State<HomeScreen> {
   double _totalRouteDistance = 0;
 
   // Profile state
-  final ProfileService _profileService = ProfileService();
+  final ProfileService _profileService =
+      ProfileService(baseUrl: 'http://127.0.0.1:3001');
   String? _profileImageUrl;
 
   @override
@@ -602,18 +603,24 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         }
 
-        final downloadUrl = await _profileService.uploadProfileImage(imageFile);
-        if (downloadUrl != null && mounted) {
-          setState(() {
-            _profileImageUrl = downloadUrl;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Profile picture updated!')),
-          );
-        } else if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to upload profile picture')),
-          );
+        try {
+          final downloadUrl =
+              await _profileService.uploadProfileImage(imageFile);
+          if (mounted) {
+            setState(() => _profileImageUrl = downloadUrl);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Profile picture updated!')),
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Upload failed: $e'),
+                duration: const Duration(seconds: 5),
+              ),
+            );
+          }
         }
       }
     }
