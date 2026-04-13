@@ -99,6 +99,38 @@ class Post {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Comment model
+// ─────────────────────────────────────────────────────────────
+class Comment {
+  final int id;
+  final int postId;
+  final String userId;
+  final String username;
+  final String content;
+  final DateTime createdAt;
+
+  const Comment({
+    required this.id,
+    required this.postId,
+    required this.userId,
+    required this.username,
+    required this.content,
+    required this.createdAt,
+  });
+
+  factory Comment.fromJson(Map<String, dynamic> j) {
+    return Comment(
+      id: j['id'] as int,
+      postId: j['post_id'] as int,
+      userId: j['user_id'].toString(),
+      username: j['username']?.toString() ?? 'Anonymous',
+      content: j['content'].toString(),
+      createdAt: DateTime.parse(j['created_at'].toString()),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
 // AiQueryResult model
 // ─────────────────────────────────────────────────────────────
 class AiQueryResult {
@@ -266,6 +298,48 @@ class PlacesApi {
           json.decode(res.body) as Map<String, dynamic>);
     } on TimeoutException {
       throw Exception('AI query timed out. Please try again.');
+    } on SocketException catch (e) {
+      throw Exception('Network error: ${e.message}');
+    }
+  }
+
+  /// GET /posts/:postId/comments
+  Future<List<Comment>> fetchComments(int postId) async {
+    final uri = Uri.parse('$baseUrl/posts/$postId/comments');
+    try {
+      final res = await http
+          .get(uri, headers: _jsonHeaders)
+          .timeout(const Duration(seconds: 10));
+      if (res.statusCode != 200) {
+        throw Exception('HTTP ${res.statusCode}: ${res.body}');
+      }
+      final List decoded = json.decode(res.body) as List;
+      return decoded
+          .map((e) => Comment.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } on TimeoutException {
+      throw Exception('Timeout fetching comments');
+    } on SocketException catch (e) {
+      throw Exception('Network error: ${e.message}');
+    }
+  }
+
+  /// POST /posts/:postId/comments  (requires auth)
+  Future<Comment> createComment(int postId, String content) async {
+    final uri = Uri.parse('$baseUrl/posts/$postId/comments');
+    try {
+      final headers = await _authHeaders();
+      final res = await http
+          .post(uri,
+              headers: headers, body: json.encode({'content': content}))
+          .timeout(const Duration(seconds: 10));
+      if (res.statusCode != 201) {
+        final body = json.decode(res.body) as Map<String, dynamic>;
+        throw Exception(body['error'] ?? 'Failed to post comment');
+      }
+      return Comment.fromJson(json.decode(res.body) as Map<String, dynamic>);
+    } on TimeoutException {
+      throw Exception('Timeout posting comment');
     } on SocketException catch (e) {
       throw Exception('Network error: ${e.message}');
     }

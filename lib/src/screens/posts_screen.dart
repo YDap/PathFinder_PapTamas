@@ -67,11 +67,13 @@ class _PostsScreenState extends State<PostsScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openCreatePost,
-        icon: const Icon(Icons.edit_note_rounded),
-        label: const Text('Create Post'),
-      ),
+      floatingActionButton: MediaQuery.of(context).viewInsets.bottom > 0
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: _openCreatePost,
+              icon: const Icon(Icons.edit_note_rounded),
+              label: const Text('Create Post'),
+            ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -129,13 +131,82 @@ class _PostsScreenState extends State<PostsScreen> {
 }
 
 // ─────────────────────────────────────────────
-// Single post card
+// Single post card — stateful for comment thread
 // ─────────────────────────────────────────────
-class _PostCard extends StatelessWidget {
+class _PostCard extends StatefulWidget {
   final Post post;
   final PlacesApi api;
 
   const _PostCard({required this.post, required this.api});
+
+  @override
+  State<_PostCard> createState() => _PostCardState();
+}
+
+class _PostCardState extends State<_PostCard> {
+  bool _commentsExpanded = false;
+  List<Comment> _comments = [];
+  bool _loadingComments = false;
+  bool _submitting = false;
+  final _commentController = TextEditingController();
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadComments() async {
+    setState(() => _loadingComments = true);
+    try {
+      final comments = await widget.api.fetchComments(widget.post.id);
+      if (mounted) setState(() => _comments = comments);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not load comments: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingComments = false);
+    }
+  }
+
+  void _toggleComments() {
+    setState(() => _commentsExpanded = !_commentsExpanded);
+    if (_commentsExpanded && _comments.isEmpty) _loadComments();
+  }
+
+  Future<void> _submitComment() async {
+    final text = _commentController.text.trim();
+    if (text.isEmpty) return;
+
+    setState(() => _submitting = true);
+    try {
+      final comment = await widget.api.createComment(widget.post.id, text);
+      if (mounted) {
+        _commentController.clear();
+        setState(() => _comments = [..._comments, comment]);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to post comment: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  void _report() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Post reported!'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
 
   String _timeAgo(DateTime dt) {
     final diff = DateTime.now().difference(dt);
@@ -147,21 +218,12 @@ class _PostCard extends StatelessWidget {
     return 'just now';
   }
 
-  void _report(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Post reported!'),
-        duration: Duration(seconds: 2),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final imageUrl = post.imageUrl != null
-        ? '${api.baseUrl}${post.imageUrl}'
-        : null;
+    final post = widget.post;
+    final imageUrl =
+        post.imageUrl != null ? '${widget.api.baseUrl}${post.imageUrl}' : null;
 
     return Card(
       margin: EdgeInsets.zero,
@@ -170,7 +232,7 @@ class _PostCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header: avatar + username + time + report button
+            // ── Header ──────────────────────────────────
             Row(
               children: [
                 CircleAvatar(
@@ -191,7 +253,8 @@ class _PostCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(post.username,
-                          style: const TextStyle(fontWeight: FontWeight.w600)),
+                          style:
+                              const TextStyle(fontWeight: FontWeight.w600)),
                       Text(
                         _timeAgo(post.createdAt),
                         style: TextStyle(
@@ -201,7 +264,7 @@ class _PostCard extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  onPressed: () => _report(context),
+                  onPressed: _report,
                   icon: Icon(Icons.flag_outlined,
                       size: 20, color: cs.onSurfaceVariant),
                   tooltip: 'Report post',
@@ -209,9 +272,12 @@ class _PostCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
-            // Content
-            Text(post.content, style: Theme.of(context).textTheme.bodyMedium),
-            // Image (if any)
+
+            // ── Post content ────────────────────────────
+            Text(post.content,
+                style: Theme.of(context).textTheme.bodyMedium),
+
+            // ── Image ───────────────────────────────────
             if (imageUrl != null) ...[
               const SizedBox(height: 10),
               ClipRRect(
@@ -245,8 +311,168 @@ class _PostCard extends StatelessWidget {
                 ),
               ),
             ],
+
+            // ── Comment toggle button ───────────────────
+            const SizedBox(height: 8),
+            InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: _toggleComments,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Icon(
+                      _commentsExpanded
+                          ? Icons.chat_bubble_rounded
+                          : Icons.chat_bubble_outline_rounded,
+                      size: 18,
+                      color: cs.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      _commentsExpanded
+                          ? 'Hide comments'
+                          : 'Comments${_comments.isNotEmpty ? ' (${_comments.length})' : ''}',
+                      style: TextStyle(
+                          color: cs.primary,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // ── Comments section ────────────────────────
+            if (_commentsExpanded) ...[
+              const SizedBox(height: 8),
+              if (_loadingComments)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Center(
+                      child: CircularProgressIndicator(strokeWidth: 2)),
+                )
+              else if (_comments.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    'No comments yet. Be the first!',
+                    style: TextStyle(
+                        color: cs.onSurfaceVariant, fontSize: 13),
+                  ),
+                )
+              else
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _comments.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (_, i) => _CommentTile(
+                    comment: _comments[i],
+                    timeAgo: _timeAgo,
+                  ),
+                ),
+
+              // ── New comment input ──────────────────────
+              const SizedBox(height: 6),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _commentController,
+                      maxLines: null,
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (_) => _submitComment(),
+                      decoration: InputDecoration(
+                        hintText: 'Write a comment…',
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        filled: true,
+                        fillColor: cs.surfaceContainerHighest,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _submitting
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child:
+                              CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : IconButton.filled(
+                          onPressed: _submitComment,
+                          icon: const Icon(Icons.send_rounded, size: 18),
+                          tooltip: 'Send',
+                        ),
+                ],
+              ),
+            ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+// Single comment row
+// ─────────────────────────────────────────────
+class _CommentTile extends StatelessWidget {
+  final Comment comment;
+  final String Function(DateTime) timeAgo;
+
+  const _CommentTile({required this.comment, required this.timeAgo});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 14,
+            backgroundColor: cs.secondaryContainer,
+            child: Text(
+              comment.username.isNotEmpty
+                  ? comment.username[0].toUpperCase()
+                  : '?',
+              style: TextStyle(
+                  fontSize: 12,
+                  color: cs.onSecondaryContainer,
+                  fontWeight: FontWeight.bold),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(comment.username,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(width: 6),
+                    Text(timeAgo(comment.createdAt),
+                        style: TextStyle(
+                            fontSize: 11, color: cs.onSurfaceVariant)),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(comment.content,
+                    style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
