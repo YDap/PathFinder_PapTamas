@@ -6,6 +6,8 @@ import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/places_api.dart';
+import '../screens/posts_screen.dart';
+import 'create_post_sheet.dart';
 
 class PlacesLayer extends StatefulWidget {
   final MapController mapController;
@@ -282,6 +284,52 @@ class _PlacesLayerState extends State<PlacesLayer> {
                       },
                       icon: const Icon(Icons.center_focus_strong),
                       label: const Text('Center here'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => PostsScreen(
+                              place: p,
+                              api: widget.api,
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.article_outlined),
+                      label: const Text('See Posts'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          useSafeArea: true,
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.vertical(
+                                top: Radius.circular(18)),
+                          ),
+                          builder: (_) => CreatePostSheet(
+                            place: p,
+                            api: widget.api,
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.edit_note_rounded),
+                      label: const Text('Create Post'),
                     ),
                   ),
                 ],
