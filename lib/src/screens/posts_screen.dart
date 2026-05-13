@@ -5,8 +5,14 @@ import '../widgets/create_post_sheet.dart';
 class PostsScreen extends StatefulWidget {
   final Place place;
   final PlacesApi api;
+  final bool isAdmin;
 
-  const PostsScreen({super.key, required this.place, required this.api});
+  const PostsScreen({
+    super.key,
+    required this.place,
+    required this.api,
+    this.isAdmin = false,
+  });
 
   @override
   State<PostsScreen> createState() => _PostsScreenState();
@@ -122,8 +128,12 @@ class _PostsScreenState extends State<PostsScreen> {
                         itemCount: _posts.length,
                         separatorBuilder: (_, __) =>
                             const SizedBox(height: 10),
-                        itemBuilder: (ctx, i) =>
-                            _PostCard(post: _posts[i], api: widget.api),
+                        itemBuilder: (ctx, i) => _PostCard(
+                              post: _posts[i],
+                              api: widget.api,
+                              isAdmin: widget.isAdmin,
+                              onDeleted: _load,
+                            ),
                       ),
                     ),
     );
@@ -136,8 +146,15 @@ class _PostsScreenState extends State<PostsScreen> {
 class _PostCard extends StatefulWidget {
   final Post post;
   final PlacesApi api;
+  final bool isAdmin;
+  final VoidCallback? onDeleted;
 
-  const _PostCard({required this.post, required this.api});
+  const _PostCard({
+    required this.post,
+    required this.api,
+    this.isAdmin = false,
+    this.onDeleted,
+  });
 
   @override
   State<_PostCard> createState() => _PostCardState();
@@ -199,13 +216,54 @@ class _PostCardState extends State<_PostCard> {
     }
   }
 
-  void _report() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Post reported!'),
-        duration: Duration(seconds: 2),
+  Future<void> _report() async {
+    try {
+      await widget.api.reportPost(widget.post.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Post reported! Our team will review it.'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Post reported!')),
+        );
+      }
+    }
+  }
+
+  Future<void> _adminDeletePost() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Post'),
+        content: const Text('Permanently delete this post and all its comments?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(ctx).colorScheme.error),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Delete')),
+        ],
       ),
     );
+    if (confirmed != true) return;
+    try {
+      await widget.api.adminDeletePost(widget.post.id);
+      widget.onDeleted?.call();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Failed: $e')));
+      }
+    }
   }
 
   String _timeAgo(DateTime dt) {
@@ -263,12 +321,20 @@ class _PostCardState extends State<_PostCard> {
                     ],
                   ),
                 ),
-                IconButton(
-                  onPressed: _report,
-                  icon: Icon(Icons.flag_outlined,
-                      size: 20, color: cs.onSurfaceVariant),
-                  tooltip: 'Report post',
-                ),
+                if (widget.isAdmin)
+                  IconButton(
+                    onPressed: _adminDeletePost,
+                    icon: Icon(Icons.delete_forever_rounded,
+                        size: 20, color: cs.error),
+                    tooltip: 'Admin: delete post',
+                  )
+                else
+                  IconButton(
+                    onPressed: _report,
+                    icon: Icon(Icons.flag_outlined,
+                        size: 20, color: cs.onSurfaceVariant),
+                    tooltip: 'Report post',
+                  ),
               ],
             ),
             const SizedBox(height: 10),
@@ -370,6 +436,24 @@ class _PostCardState extends State<_PostCard> {
                   itemBuilder: (_, i) => _CommentTile(
                     comment: _comments[i],
                     timeAgo: _timeAgo,
+                    isAdmin: widget.isAdmin,
+                    onAdminDelete: widget.isAdmin
+                        ? () async {
+                            try {
+                              await widget.api
+                                  .adminDeleteComment(_comments[i].id);
+                              if (mounted) {
+                                setState(() => _comments.removeAt(i));
+                              }
+                            } catch (e) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Failed: $e')),
+                                );
+                              }
+                            }
+                          }
+                        : null,
                   ),
                 ),
 
@@ -426,8 +510,15 @@ class _PostCardState extends State<_PostCard> {
 class _CommentTile extends StatelessWidget {
   final Comment comment;
   final String Function(DateTime) timeAgo;
+  final bool isAdmin;
+  final VoidCallback? onAdminDelete;
 
-  const _CommentTile({required this.comment, required this.timeAgo});
+  const _CommentTile({
+    required this.comment,
+    required this.timeAgo,
+    this.isAdmin = false,
+    this.onAdminDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -464,6 +555,14 @@ class _CommentTile extends StatelessWidget {
                     Text(timeAgo(comment.createdAt),
                         style: TextStyle(
                             fontSize: 11, color: cs.onSurfaceVariant)),
+                    if (isAdmin) ...[
+                      const Spacer(),
+                      GestureDetector(
+                        onTap: onAdminDelete,
+                        child: Icon(Icons.delete_outline_rounded,
+                            size: 16, color: cs.error),
+                      ),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 2),

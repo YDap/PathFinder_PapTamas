@@ -14,6 +14,7 @@ import '../services/auth_service.dart';
 import '../services/profile_service.dart';
 import '../app.dart';
 import 'login_screen.dart';
+import 'admin_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   static const routeName = '/home';
@@ -67,6 +68,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final ProfileService _profileService =
       ProfileService(baseUrl: 'http://127.0.0.1:3001');
   String? _profileImageUrl;
+  bool _isAdmin = false;
 
   @override
   void initState() {
@@ -79,10 +81,18 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadProfileImage() async {
-    final url = await _profileService.getProfileImageUrl();
+    final user = await _placesApi.fetchCurrentUser();
     if (mounted) {
       setState(() {
-        _profileImageUrl = url;
+        if (user.imageUrl != null) _profileImageUrl = user.imageUrl;
+        _isAdmin = user.isAdmin;
+      });
+    }
+    // Also check local cache for immediate display
+    final cached = await _profileService.getProfileImageUrl();
+    if (mounted && cached != null && _profileImageUrl == null) {
+      setState(() {
+        _profileImageUrl = cached;
       });
     }
   }
@@ -133,6 +143,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     _maxElevation != null ||
                     _maxDistanceKm != null,
                 onNavigate: _startNavigation,
+                isAdmin: _isAdmin,
               ),
               // Navigation route polyline
               if (_routePolyline.isNotEmpty)
@@ -718,6 +729,30 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
+                  if (_isAdmin) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: cs.errorContainer,
+                          foregroundColor: cs.onErrorContainer,
+                        ),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  AdminScreen(api: _placesApi),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.admin_panel_settings_rounded),
+                        label: const Text('Admin Panel'),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
                   Row(
                     children: [
                       Expanded(

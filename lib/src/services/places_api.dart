@@ -99,6 +99,41 @@ class Post {
 }
 
 // ─────────────────────────────────────────────────────────────
+// PostReport model (admin panel)
+// ─────────────────────────────────────────────────────────────
+class PostReport {
+  final int postId;
+  final String content;
+  final String author;
+  final String? imageUrl;
+  final String placeId;
+  final int reportCount;
+  final DateTime firstReportedAt;
+
+  const PostReport({
+    required this.postId,
+    required this.content,
+    required this.author,
+    this.imageUrl,
+    required this.placeId,
+    required this.reportCount,
+    required this.firstReportedAt,
+  });
+
+  factory PostReport.fromJson(Map<String, dynamic> j) {
+    return PostReport(
+      postId: j['post_id'] as int,
+      content: j['content'].toString(),
+      author: j['author']?.toString() ?? 'Anonymous',
+      imageUrl: j['image_url']?.toString(),
+      placeId: j['place_id'].toString(),
+      reportCount: int.parse(j['report_count'].toString()),
+      firstReportedAt: DateTime.parse(j['first_reported_at'].toString()),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
 // Comment model
 // ─────────────────────────────────────────────────────────────
 class Comment {
@@ -343,6 +378,82 @@ class PlacesApi {
     } on SocketException catch (e) {
       throw Exception('Network error: ${e.message}');
     }
+  }
+
+  /// GET /users/profile-image — returns { profile_image_url, is_admin }
+  Future<({String? imageUrl, bool isAdmin})> fetchCurrentUser() async {
+    final uri = Uri.parse('$baseUrl/users/profile-image');
+    try {
+      final headers = await _authHeaders();
+      final res = await http
+          .get(uri, headers: headers)
+          .timeout(const Duration(seconds: 10));
+      if (res.statusCode != 200) return (imageUrl: null, isAdmin: false);
+      final body = json.decode(res.body) as Map<String, dynamic>;
+      final rel = body['profile_image_url']?.toString();
+      return (
+        imageUrl: rel != null ? '$baseUrl$rel' : null,
+        isAdmin: body['is_admin'] == true,
+      );
+    } catch (_) {
+      return (imageUrl: null, isAdmin: false);
+    }
+  }
+
+  /// POST /posts/:postId/report  (requires auth)
+  Future<void> reportPost(int postId) async {
+    final uri = Uri.parse('$baseUrl/posts/$postId/report');
+    try {
+      final headers = await _authHeaders();
+      await http.post(uri, headers: headers).timeout(const Duration(seconds: 10));
+    } on TimeoutException {
+      throw Exception('Timeout reporting post');
+    } on SocketException catch (e) {
+      throw Exception('Network error: ${e.message}');
+    }
+  }
+
+  /// GET /admin/reports  (requires admin)
+  Future<List<PostReport>> fetchReports() async {
+    final uri = Uri.parse('$baseUrl/admin/reports');
+    try {
+      final headers = await _authHeaders();
+      final res = await http
+          .get(uri, headers: headers)
+          .timeout(const Duration(seconds: 10));
+      if (res.statusCode != 200) {
+        throw Exception('HTTP ${res.statusCode}');
+      }
+      final List decoded = json.decode(res.body) as List;
+      return decoded
+          .map((e) => PostReport.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } on TimeoutException {
+      throw Exception('Timeout fetching reports');
+    } on SocketException catch (e) {
+      throw Exception('Network error: ${e.message}');
+    }
+  }
+
+  /// DELETE /admin/posts/:postId  (requires admin)
+  Future<void> adminDeletePost(int postId) async {
+    final uri = Uri.parse('$baseUrl/admin/posts/$postId');
+    final headers = await _authHeaders();
+    await http.delete(uri, headers: headers).timeout(const Duration(seconds: 10));
+  }
+
+  /// DELETE /admin/comments/:commentId  (requires admin)
+  Future<void> adminDeleteComment(int commentId) async {
+    final uri = Uri.parse('$baseUrl/admin/comments/$commentId');
+    final headers = await _authHeaders();
+    await http.delete(uri, headers: headers).timeout(const Duration(seconds: 10));
+  }
+
+  /// DELETE /admin/reports/:postId — dismiss reports without deleting post
+  Future<void> dismissReports(int postId) async {
+    final uri = Uri.parse('$baseUrl/admin/reports/$postId');
+    final headers = await _authHeaders();
+    await http.delete(uri, headers: headers).timeout(const Duration(seconds: 10));
   }
 
   /// GET /places/ratings/my  (requires auth)

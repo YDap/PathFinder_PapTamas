@@ -19,6 +19,7 @@ class PlacesLayer extends StatefulWidget {
   final double? maxDistanceKm;
   final LatLng? currentLocation;
   final bool showLocations;
+  final bool isAdmin;
   final Function(Place)? onNavigate;
 
   const PlacesLayer({
@@ -32,6 +33,7 @@ class PlacesLayer extends StatefulWidget {
     this.maxDistanceKm,
     this.currentLocation,
     this.showLocations = true,
+    this.isAdmin = false,
     this.onNavigate,
   });
 
@@ -301,6 +303,7 @@ class _PlacesLayerState extends State<PlacesLayer> {
                             builder: (_) => PostsScreen(
                               place: p,
                               api: widget.api,
+                              isAdmin: widget.isAdmin,
                             ),
                           ),
                         );
