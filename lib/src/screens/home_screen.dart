@@ -29,7 +29,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // USB + adb reverse esetere:
   final PlacesApi _placesApi =
-      const PlacesApi(baseUrl: 'http://127.0.0.1:3001');
+      const PlacesApi(baseUrl: 'https://pathfinderbackend-production.up.railway.app');
 
   final LatLng _initialCenter = const LatLng(45.9432, 24.9668);
   final double _initialZoom = 6.5;
@@ -66,7 +66,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Profile state
   final ProfileService _profileService =
-      ProfileService(baseUrl: 'http://127.0.0.1:3001');
+      ProfileService(baseUrl: 'https://pathfinderbackend-production.up.railway.app');
   String? _profileImageUrl;
   bool _isAdmin = false;
 

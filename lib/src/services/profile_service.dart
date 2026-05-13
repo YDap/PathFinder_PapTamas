@@ -9,7 +9,7 @@ class ProfileService {
   static const String _profileImageUrlKey = 'profile_image_url';
   final String baseUrl;
 
-  ProfileService({this.baseUrl = 'http://127.0.0.1:3001'});
+  ProfileService({this.baseUrl = 'https://pathfinderbackend-production.up.railway.app'});
 
   final ImagePicker _imagePicker = ImagePicker();
   final FirebaseAuth _auth = FirebaseAuth.instance;
