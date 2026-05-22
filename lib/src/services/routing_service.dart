@@ -12,7 +12,7 @@ class RouteData {
 class RoutingService {
   // Using OSRM (Open Source Routing Machine) public API
   static const String osrmBase =
-      'https://router.project-osrm.org/route/v1/driving';
+      'https://router.project-osrm.org/route/v1/foot';
 
   /// Fetch route data from OSRM API between two locations
   /// Returns RouteData containing polyline and distance

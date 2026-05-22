@@ -61,6 +61,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Place? _navigationDestination;
   List<LatLng> _routePolyline = [];
   bool _isNavigating = false;
+  bool _followUser = true;
   double _distanceToDestination = 0;
   double _totalRouteDistance = 0;
 
@@ -119,6 +120,14 @@ class _HomeScreenState extends State<HomeScreen> {
             options: MapOptions(
               initialCenter: _initialCenter,
               initialZoom: _initialZoom,
+              onMapEvent: (MapEvent event) {
+                if (_isNavigating &&
+                    _followUser &&
+                    event is MapEventMoveStart &&
+                    event.source != MapEventSource.mapController) {
+                  setState(() => _followUser = false);
+                }
+              },
             ),
             children: [
               TileLayer(
@@ -352,6 +361,26 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                         const SizedBox(height: 12),
+                        // Re-center button (shown when user panned away)
+                        if (!_followUser) ...[
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: () {
+                                setState(() => _followUser = true);
+                                if (_currentLatLng != null) {
+                                  _mapController.move(
+                                    _currentLatLng!,
+                                    _mapController.camera.zoom,
+                                  );
+                                }
+                              },
+                              icon: const Icon(Icons.my_location_rounded),
+                              label: const Text('Re-center'),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
                         // Stop navigation button
                         SizedBox(
                           width: double.infinity,
@@ -463,6 +492,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _navigationDestination = destination;
       _isNavigating = true;
+      _followUser = true;
     });
 
     try {
@@ -513,9 +543,10 @@ class _HomeScreenState extends State<HomeScreen> {
     ).listen((Position position) {
       if (_isNavigating && mounted) {
         final userLocation = LatLng(position.latitude, position.longitude);
-        setState(() {
-          _currentLatLng = userLocation;
-        });
+        setState(() => _currentLatLng = userLocation);
+        if (_followUser) {
+          _mapController.move(userLocation, _mapController.camera.zoom);
+        }
         _updateNavigationPolyline(userLocation);
       }
     });
