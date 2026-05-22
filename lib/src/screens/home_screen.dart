@@ -15,6 +15,7 @@ import '../services/profile_service.dart';
 import '../app.dart';
 import 'login_screen.dart';
 import 'admin_screen.dart';
+import 'friends_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   static const routeName = '/home';
@@ -786,6 +787,22 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                   Row(
                     children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => FriendsScreen(api: _placesApi),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.people_rounded),
+                          label: const Text('Friends'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
                       Expanded(
                         child: FilledButton.icon(
                           onPressed: () {

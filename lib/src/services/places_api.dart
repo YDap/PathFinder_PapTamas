@@ -172,6 +172,36 @@ class Comment {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Friend / user search model
+// ─────────────────────────────────────────────────────────────
+class FriendUser {
+  final String userId;
+  final String? displayName;
+  final String? email;
+  final String? profileImageUrl;
+  final String friendshipStatus; // 'friend' | 'sent' | 'incoming' | 'none'
+
+  const FriendUser({
+    required this.userId,
+    this.displayName,
+    this.email,
+    this.profileImageUrl,
+    this.friendshipStatus = 'none',
+  });
+
+  String get label =>
+      displayName?.isNotEmpty == true ? displayName! : (email ?? userId);
+
+  factory FriendUser.fromJson(Map<String, dynamic> j) => FriendUser(
+        userId: j['user_id'].toString(),
+        displayName: j['display_name']?.toString(),
+        email: j['email']?.toString(),
+        profileImageUrl: j['profile_image_url']?.toString(),
+        friendshipStatus: j['friendship_status']?.toString() ?? 'none',
+      );
+}
+
+// ─────────────────────────────────────────────────────────────
 // AiQueryResult model
 // ─────────────────────────────────────────────────────────────
 class AiQueryResult {
@@ -530,5 +560,63 @@ class PlacesApi {
     } on SocketException catch (e) {
       throw Exception('Network error: ${e.message}');
     }
+  }
+
+  // ── Friends ───────────────────────────────────────────────
+
+  Future<List<FriendUser>> getFriends() async {
+    final token = await _getToken();
+    final res = await http.get(Uri.parse('$baseUrl/friends'),
+        headers: {..._jsonHeaders, 'Authorization': 'Bearer $token'});
+    if (res.statusCode != 200) throw Exception('Failed to load friends');
+    return (json.decode(res.body) as List)
+        .map((j) => FriendUser.fromJson(j as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<FriendUser>> getFriendRequests() async {
+    final token = await _getToken();
+    final res = await http.get(Uri.parse('$baseUrl/friends/requests'),
+        headers: {..._jsonHeaders, 'Authorization': 'Bearer $token'});
+    if (res.statusCode != 200) throw Exception('Failed to load requests');
+    return (json.decode(res.body) as List)
+        .map((j) => FriendUser.fromJson(j as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<FriendUser>> searchUsers(String q) async {
+    final token = await _getToken();
+    final uri = Uri.parse('$baseUrl/friends/search').replace(queryParameters: {'q': q});
+    final res = await http.get(uri,
+        headers: {..._jsonHeaders, 'Authorization': 'Bearer $token'});
+    if (res.statusCode != 200) return [];
+    return (json.decode(res.body) as List)
+        .map((j) => FriendUser.fromJson(j as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> sendFriendRequest(String targetUserId) async {
+    final token = await _getToken();
+    final res = await http.post(Uri.parse('$baseUrl/friends/request'),
+        headers: {..._jsonHeaders, 'Authorization': 'Bearer $token'},
+        body: json.encode({'targetUserId': targetUserId}));
+    if (res.statusCode != 200) {
+      final body = json.decode(res.body) as Map<String, dynamic>;
+      throw Exception(body['error'] ?? 'Failed to send request');
+    }
+  }
+
+  Future<void> acceptFriendRequest(String requesterId) async {
+    final token = await _getToken();
+    final res = await http.post(Uri.parse('$baseUrl/friends/accept/$requesterId'),
+        headers: {..._jsonHeaders, 'Authorization': 'Bearer $token'});
+    if (res.statusCode != 200) throw Exception('Failed to accept request');
+  }
+
+  Future<void> removeFriend(String otherUserId) async {
+    final token = await _getToken();
+    final res = await http.delete(Uri.parse('$baseUrl/friends/$otherUserId'),
+        headers: {..._jsonHeaders, 'Authorization': 'Bearer $token'});
+    if (res.statusCode != 200) throw Exception('Failed to remove friend');
   }
 }
