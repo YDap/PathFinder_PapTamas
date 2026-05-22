@@ -245,8 +245,7 @@ class PlacesApi {
 
       return _parsePlaceList(res);
     } on TimeoutException {
-      throw Exception('Timeout reaching $baseUrl. '
-          'Make sure adb reverse tcp:3000 tcp:3000 is running.');
+      throw Exception('Request timed out. Check your internet connection and try again.');
     } on SocketException catch (e) {
       throw Exception('Network error to $baseUrl: ${e.message}');
     }
