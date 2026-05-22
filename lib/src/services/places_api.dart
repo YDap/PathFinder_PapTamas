@@ -73,6 +73,7 @@ class Post {
   final String username;
   final String content;
   final String? imageUrl;
+  final String? authorProfileImageUrl;
   final DateTime createdAt;
 
   const Post({
@@ -82,6 +83,7 @@ class Post {
     required this.username,
     required this.content,
     this.imageUrl,
+    this.authorProfileImageUrl,
     required this.createdAt,
   });
 
@@ -93,6 +95,7 @@ class Post {
       username: j['username']?.toString() ?? 'Anonymous',
       content: j['content'].toString(),
       imageUrl: j['image_url']?.toString(),
+      authorProfileImageUrl: j['author_profile_image_url']?.toString(),
       createdAt: DateTime.parse(j['created_at'].toString()),
     );
   }
@@ -142,6 +145,7 @@ class Comment {
   final String userId;
   final String username;
   final String content;
+  final String? authorProfileImageUrl;
   final DateTime createdAt;
 
   const Comment({
@@ -150,6 +154,7 @@ class Comment {
     required this.userId,
     required this.username,
     required this.content,
+    this.authorProfileImageUrl,
     required this.createdAt,
   });
 
@@ -160,6 +165,7 @@ class Comment {
       userId: j['user_id'].toString(),
       username: j['username']?.toString() ?? 'Anonymous',
       content: j['content'].toString(),
+      authorProfileImageUrl: j['author_profile_image_url']?.toString(),
       createdAt: DateTime.parse(j['created_at'].toString()),
     );
   }

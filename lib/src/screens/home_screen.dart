@@ -756,20 +756,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () {
-                            ScaffoldMessenger.of(ctx).showSnackBar(
-                              const SnackBar(
-                                content: Text('Stats coming soon'),
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.bar_chart_rounded),
-                          label: const Text('Stats'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
                         child: FilledButton.icon(
                           onPressed: () {
                             Navigator.of(ctx).pop();

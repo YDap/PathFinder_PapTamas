@@ -282,6 +282,9 @@ class _PostCardState extends State<_PostCard> {
     final post = widget.post;
     final imageUrl =
         post.imageUrl != null ? '${widget.api.baseUrl}${post.imageUrl}' : null;
+    final authorAvatarUrl = post.authorProfileImageUrl != null
+        ? '${widget.api.baseUrl}${post.authorProfileImageUrl}'
+        : null;
 
     return Card(
       margin: EdgeInsets.zero,
@@ -296,14 +299,19 @@ class _PostCardState extends State<_PostCard> {
                 CircleAvatar(
                   radius: 18,
                   backgroundColor: cs.primaryContainer,
-                  child: Text(
-                    post.username.isNotEmpty
-                        ? post.username[0].toUpperCase()
-                        : '?',
-                    style: TextStyle(
-                        color: cs.onPrimaryContainer,
-                        fontWeight: FontWeight.bold),
-                  ),
+                  backgroundImage: authorAvatarUrl != null
+                      ? NetworkImage(authorAvatarUrl)
+                      : null,
+                  child: authorAvatarUrl == null
+                      ? Text(
+                          post.username.isNotEmpty
+                              ? post.username[0].toUpperCase()
+                              : '?',
+                          style: TextStyle(
+                              color: cs.onPrimaryContainer,
+                              fontWeight: FontWeight.bold),
+                        )
+                      : null,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -436,21 +444,20 @@ class _PostCardState extends State<_PostCard> {
                   itemBuilder: (_, i) => _CommentTile(
                     comment: _comments[i],
                     timeAgo: _timeAgo,
+                    baseUrl: widget.api.baseUrl,
                     isAdmin: widget.isAdmin,
                     onAdminDelete: widget.isAdmin
                         ? () async {
+                            final messenger = ScaffoldMessenger.of(context);
                             try {
                               await widget.api
                                   .adminDeleteComment(_comments[i].id);
-                              if (mounted) {
-                                setState(() => _comments.removeAt(i));
-                              }
+                              if (!mounted) return;
+                              setState(() => _comments.removeAt(i));
                             } catch (e) {
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Failed: $e')),
-                                );
-                              }
+                              messenger.showSnackBar(
+                                SnackBar(content: Text('Failed: $e')),
+                              );
                             }
                           }
                         : null,
@@ -512,10 +519,12 @@ class _CommentTile extends StatelessWidget {
   final String Function(DateTime) timeAgo;
   final bool isAdmin;
   final VoidCallback? onAdminDelete;
+  final String baseUrl;
 
   const _CommentTile({
     required this.comment,
     required this.timeAgo,
+    required this.baseUrl,
     this.isAdmin = false,
     this.onAdminDelete,
   });
@@ -523,6 +532,9 @@ class _CommentTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final avatarUrl = comment.authorProfileImageUrl != null
+        ? '$baseUrl${comment.authorProfileImageUrl}'
+        : null;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
@@ -531,15 +543,18 @@ class _CommentTile extends StatelessWidget {
           CircleAvatar(
             radius: 14,
             backgroundColor: cs.secondaryContainer,
-            child: Text(
-              comment.username.isNotEmpty
-                  ? comment.username[0].toUpperCase()
-                  : '?',
-              style: TextStyle(
-                  fontSize: 12,
-                  color: cs.onSecondaryContainer,
-                  fontWeight: FontWeight.bold),
-            ),
+            backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
+            child: avatarUrl == null
+                ? Text(
+                    comment.username.isNotEmpty
+                        ? comment.username[0].toUpperCase()
+                        : '?',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: cs.onSecondaryContainer,
+                        fontWeight: FontWeight.bold),
+                  )
+                : null,
           ),
           const SizedBox(width: 8),
           Expanded(
