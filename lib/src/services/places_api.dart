@@ -202,6 +202,44 @@ class FriendUser {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Navigate Together models
+// ─────────────────────────────────────────────────────────────
+class NavInvite {
+  final String sessionId;
+  final String creatorId;
+  final String creatorName;
+  final String? creatorImage;
+
+  const NavInvite({
+    required this.sessionId,
+    required this.creatorId,
+    required this.creatorName,
+    this.creatorImage,
+  });
+
+  factory NavInvite.fromJson(Map<String, dynamic> j) => NavInvite(
+        sessionId: j['session_id'].toString(),
+        creatorId: j['creator_id'].toString(),
+        creatorName: j['creator_name']?.toString() ?? 'Someone',
+        creatorImage: j['creator_image']?.toString(),
+      );
+}
+
+class PartnerLocation {
+  final double lat;
+  final double lng;
+  final DateTime updatedAt;
+
+  const PartnerLocation({required this.lat, required this.lng, required this.updatedAt});
+
+  factory PartnerLocation.fromJson(Map<String, dynamic> j) => PartnerLocation(
+        lat: (j['lat'] as num).toDouble(),
+        lng: (j['lng'] as num).toDouble(),
+        updatedAt: DateTime.parse(j['updated_at'].toString()),
+      );
+}
+
+// ─────────────────────────────────────────────────────────────
 // AiQueryResult model
 // ─────────────────────────────────────────────────────────────
 class AiQueryResult {
@@ -618,5 +656,68 @@ class PlacesApi {
     final res = await http.delete(Uri.parse('$baseUrl/friends/$otherUserId'),
         headers: {..._jsonHeaders, 'Authorization': 'Bearer $token'});
     if (res.statusCode != 200) throw Exception('Failed to remove friend');
+  }
+
+  // ── Navigate Together ────────────────────────────────────
+
+  Future<String> inviteToNavigate(String partnerUserId) async {
+    final token = await _getToken();
+    final res = await http.post(Uri.parse('$baseUrl/navigate/invite'),
+        headers: {..._jsonHeaders, 'Authorization': 'Bearer $token'},
+        body: json.encode({'partnerUserId': partnerUserId}));
+    if (res.statusCode != 200) throw Exception('Failed to send invite');
+    return (json.decode(res.body) as Map<String, dynamic>)['session_id'].toString();
+  }
+
+  Future<NavInvite?> getPendingNavInvite() async {
+    final token = await _getToken();
+    final res = await http.get(Uri.parse('$baseUrl/navigate/pending'),
+        headers: {..._jsonHeaders, 'Authorization': 'Bearer $token'});
+    if (res.statusCode != 200) return null;
+    final body = json.decode(res.body);
+    if (body == null) return null;
+    return NavInvite.fromJson(body as Map<String, dynamic>);
+  }
+
+  Future<void> acceptNavSession(String sessionId) async {
+    final token = await _getToken();
+    await http.post(Uri.parse('$baseUrl/navigate/accept/$sessionId'),
+        headers: {..._jsonHeaders, 'Authorization': 'Bearer $token'});
+  }
+
+  Future<void> declineNavSession(String sessionId) async {
+    final token = await _getToken();
+    await http.post(Uri.parse('$baseUrl/navigate/decline/$sessionId'),
+        headers: {..._jsonHeaders, 'Authorization': 'Bearer $token'});
+  }
+
+  Future<void> updateNavLocation(String sessionId, double lat, double lng) async {
+    final token = await _getToken();
+    await http.put(Uri.parse('$baseUrl/navigate/location'),
+        headers: {..._jsonHeaders, 'Authorization': 'Bearer $token'},
+        body: json.encode({'sessionId': sessionId, 'lat': lat, 'lng': lng}));
+  }
+
+  /// Returns { status: 'active'|'invited'|'ended', partner_location: PartnerLocation? }
+  Future<({String status, PartnerLocation? partnerLocation})> getPartnerNavLocation(
+      String sessionId) async {
+    final token = await _getToken();
+    final res = await http.get(
+        Uri.parse('$baseUrl/navigate/partner-location/$sessionId'),
+        headers: {..._jsonHeaders, 'Authorization': 'Bearer $token'});
+    if (res.statusCode != 200) return (status: 'ended', partnerLocation: null);
+    final body = json.decode(res.body) as Map<String, dynamic>;
+    final status = body['status']?.toString() ?? 'ended';
+    final locJson = body['partner_location'];
+    final loc = locJson != null
+        ? PartnerLocation.fromJson(locJson as Map<String, dynamic>)
+        : null;
+    return (status: status, partnerLocation: loc);
+  }
+
+  Future<void> endNavSession(String sessionId) async {
+    final token = await _getToken();
+    await http.delete(Uri.parse('$baseUrl/navigate/session/$sessionId'),
+        headers: {..._jsonHeaders, 'Authorization': 'Bearer $token'});
   }
 }

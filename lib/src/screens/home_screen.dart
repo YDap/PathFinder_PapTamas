@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -66,6 +68,13 @@ class _HomeScreenState extends State<HomeScreen> {
   double _distanceToDestination = 0;
   double _totalRouteDistance = 0;
 
+  // Navigate Together state
+  String? _navSessionId;
+  String? _navPartnerName;
+  PartnerLocation? _partnerLocation;
+  Timer? _navPollTimer;
+  Timer? _invitePollTimer;
+
   // Profile state
   final ProfileService _profileService =
       ProfileService(baseUrl: 'https://pathfinderbackend-production.up.railway.app');
@@ -80,6 +89,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _distanceController = TextEditingController();
     _ensureLocationAndCenter(silent: true);
     _loadProfileImage();
+    _startInvitePolling();
   }
 
   Future<void> _loadProfileImage() async {
@@ -101,6 +111,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _navPollTimer?.cancel();
+    _invitePollTimer?.cancel();
     _minElevationController.dispose();
     _maxElevationController.dispose();
     _distanceController.dispose();
@@ -176,6 +188,17 @@ class _HomeScreenState extends State<HomeScreen> {
                       width: 40,
                       height: 40,
                       child: const _CurrentLocationIndicator(),
+                    ),
+                  ],
+                ),
+              if (_partnerLocation != null)
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      point: LatLng(_partnerLocation!.lat, _partnerLocation!.lng),
+                      width: 52,
+                      height: 52,
+                      child: _PartnerMarker(name: _navPartnerName ?? 'Friend'),
                     ),
                   ],
                 ),
@@ -362,6 +385,51 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                         const SizedBox(height: 12),
+                        // Navigate Together row
+                        if (_navSessionId != null) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.green.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.green.shade200),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.people_rounded, color: Colors.green, size: 20),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'With ${_navPartnerName ?? 'Friend'}',
+                                    style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w600),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: _endNavSession,
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: Colors.red,
+                                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                                    minimumSize: Size.zero,
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  child: const Text('End'),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                        ] else ...[
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: _inviteFriendToNavigate,
+                              icon: const Icon(Icons.people_rounded),
+                              label: const Text('Navigate Together'),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
                         // Re-center button (shown when user panned away)
                         if (!_followUser) ...[
                           SizedBox(
@@ -611,6 +679,172 @@ class _HomeScreenState extends State<HomeScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Navigation stopped')),
     );
+  }
+
+  // ── Navigate Together ────────────────────────────────────────
+
+  void _startInvitePolling() {
+    _invitePollTimer?.cancel();
+    _invitePollTimer = Timer.periodic(const Duration(seconds: 8), (_) async {
+      if (_navSessionId != null || !mounted) return;
+      try {
+        final invite = await _placesApi.getPendingNavInvite();
+        if (invite != null && mounted && _navSessionId == null) {
+          _invitePollTimer?.cancel();
+          _showInviteDialog(invite);
+        }
+      } catch (_) {}
+    });
+  }
+
+  void _showInviteDialog(NavInvite invite) {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Navigate Together'),
+        content: Text('${invite.creatorName} wants to navigate with you!'),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await _placesApi.declineNavSession(invite.sessionId);
+              } catch (_) {}
+              _startInvitePolling();
+            },
+            child: const Text('Decline'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await _placesApi.acceptNavSession(invite.sessionId);
+                if (!mounted) return;
+                setState(() {
+                  _navSessionId = invite.sessionId;
+                  _navPartnerName = invite.creatorName;
+                });
+                _startNavSessionPolling();
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Could not join: $e')),
+                  );
+                  _startInvitePolling();
+                }
+              }
+            },
+            child: const Text('Accept'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _startNavSessionPolling() {
+    _invitePollTimer?.cancel();
+    _navPollTimer?.cancel();
+    _navPollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
+      if (_navSessionId == null || !mounted) return;
+      try {
+        if (_currentLatLng != null) {
+          await _placesApi.updateNavLocation(
+            _navSessionId!,
+            _currentLatLng!.latitude,
+            _currentLatLng!.longitude,
+          );
+        }
+        final result = await _placesApi.getPartnerNavLocation(_navSessionId!);
+        if (!mounted) return;
+        if (result.status == 'ended') {
+          _endNavSession(notify: true);
+          return;
+        }
+        if (result.status == 'active') {
+          setState(() => _partnerLocation = result.partnerLocation);
+        }
+      } catch (_) {}
+    });
+  }
+
+  Future<void> _inviteFriendToNavigate() async {
+    try {
+      final friends = await _placesApi.getFriends();
+      if (!mounted) return;
+      if (friends.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No friends yet. Add friends first!')),
+        );
+        return;
+      }
+      showModalBottomSheet<void>(
+        context: context,
+        builder: (ctx) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text('Invite a friend to navigate together',
+                  style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+            ),
+            ...friends.map((f) {
+              return ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Theme.of(ctx).colorScheme.primaryContainer,
+                  child: Text(f.label[0].toUpperCase(),
+                      style: TextStyle(color: Theme.of(ctx).colorScheme.onPrimaryContainer)),
+                ),
+                title: Text(f.label),
+                subtitle: f.email != null ? Text(f.email!) : null,
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  try {
+                    final sessionId = await _placesApi.inviteToNavigate(f.userId);
+                    if (!mounted) return;
+                    setState(() {
+                      _navSessionId = sessionId;
+                      _navPartnerName = f.label;
+                    });
+                    _startNavSessionPolling();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Waiting for ${f.label} to accept...')),
+                    );
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+                      );
+                    }
+                  }
+                },
+              );
+            }),
+            const SizedBox(height: 16),
+          ],
+        ),
+      );
+    } catch (_) {}
+  }
+
+  void _endNavSession({bool notify = false}) {
+    final sessionId = _navSessionId;
+    if (sessionId != null) {
+      _placesApi.endNavSession(sessionId);
+    }
+    _navPollTimer?.cancel();
+    _navPollTimer = null;
+    setState(() {
+      _navSessionId = null;
+      _navPartnerName = null;
+      _partnerLocation = null;
+    });
+    _startInvitePolling();
+    if (notify && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Navigate together session ended')),
+      );
+    }
   }
 
   Future<void> _changeProfilePicture() async {
@@ -1266,6 +1500,45 @@ class _HomeScreenState extends State<HomeScreen> {
         .split(' ')
         .map((word) => word[0].toUpperCase() + word.substring(1))
         .join(' ');
+  }
+}
+
+// ----------------------------------------------------------
+// Partner location marker (green pin with initial)
+// ----------------------------------------------------------
+
+class _PartnerMarker extends StatelessWidget {
+  final String name;
+  const _PartnerMarker({required this.name});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: Colors.green.shade600,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2),
+            boxShadow: const [
+              BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
+            ],
+          ),
+          child: Center(
+            child: Text(
+              name.isNotEmpty ? name[0].toUpperCase() : '?',
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+          ),
+        ),
+        Container(width: 3, height: 8, color: Colors.green.shade600),
+        Container(width: 8, height: 3, color: Colors.green.shade600),
+      ],
+    );
   }
 }
 
