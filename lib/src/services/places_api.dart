@@ -806,7 +806,10 @@ class PlacesApi {
     final res = await http.post(Uri.parse('$baseUrl/navigate/invite'),
         headers: {..._jsonHeaders, 'Authorization': 'Bearer $token'},
         body: json.encode(body));
-    if (res.statusCode != 200) throw Exception('Failed to send invite');
+    if (res.statusCode != 200) {
+      final errBody = json.decode(res.body) as Map<String, dynamic>;
+      throw Exception(errBody['error'] ?? 'Failed to send invite (${res.statusCode})');
+    }
     return (json.decode(res.body) as Map<String, dynamic>)['session_id'].toString();
   }
 
