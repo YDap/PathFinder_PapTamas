@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
@@ -90,6 +91,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _ensureLocationAndCenter(silent: true);
     _loadProfileImage();
     _startInvitePolling();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _restoreNavigationState());
   }
 
   Future<void> _loadProfileImage() async {
@@ -233,7 +235,23 @@ class _HomeScreenState extends State<HomeScreen> {
                       point: LatLng(_partnerLocation!.lat, _partnerLocation!.lng),
                       width: 52,
                       height: 52,
-                      child: _PartnerMarker(name: _navPartnerName ?? 'Friend'),
+                      child: GestureDetector(
+                        onTap: () {
+                          final km = _partnerLocation?.remainingKm;
+                          final name = _navPartnerName ?? 'Friend';
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                km != null
+                                    ? '$name: ${km.toStringAsFixed(2)} km to destination'
+                                    : '$name\'s location',
+                              ),
+                              duration: const Duration(seconds: 3),
+                            ),
+                          );
+                        },
+                        child: _PartnerMarker(name: _navPartnerName ?? 'Friend'),
+                      ),
                     ),
                   ],
                 ),
@@ -448,10 +466,21 @@ class _HomeScreenState extends State<HomeScreen> {
                                 const Icon(Icons.people_rounded, color: Colors.green, size: 20),
                                 const SizedBox(width: 8),
                                 Expanded(
-                                  child: Text(
-                                    'With ${_navPartnerName ?? 'Friend'}',
-                                    style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w600),
-                                    overflow: TextOverflow.ellipsis,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        'With ${_navPartnerName ?? 'Friend'}',
+                                        style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w600),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      if (_partnerLocation?.remainingKm != null)
+                                        Text(
+                                          '${_partnerLocation!.remainingKm!.toStringAsFixed(1)} km left',
+                                          style: TextStyle(color: Colors.green.shade700, fontSize: 12),
+                                        ),
+                                    ],
                                   ),
                                 ),
                                 TextButton(
@@ -626,6 +655,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _totalRouteDistance = routeData.distance / 1000; // Convert to km
           _distanceToDestination = _totalRouteDistance;
         });
+        _saveNavigationState();
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -725,12 +755,77 @@ class _HomeScreenState extends State<HomeScreen> {
       _distanceToDestination = 0;
       _totalRouteDistance = 0;
     });
+    _saveNavigationState();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Navigation stopped')),
     );
   }
 
   // ── Navigate Together ────────────────────────────────────────
+
+  Future<void> _saveNavigationState() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (_navSessionId != null) {
+      await prefs.setString('nav_session_id', _navSessionId!);
+      if (_navPartnerName != null) {
+        await prefs.setString('nav_partner_name', _navPartnerName!);
+      }
+    } else {
+      await prefs.remove('nav_session_id');
+      await prefs.remove('nav_partner_name');
+    }
+    await prefs.setBool('is_navigating', _isNavigating);
+    if (_isNavigating && _navigationDestination != null) {
+      await prefs.setString('nav_dest_id', _navigationDestination!.id);
+      await prefs.setString('nav_dest_name', _navigationDestination!.name);
+      await prefs.setString('nav_dest_category', _navigationDestination!.category);
+      await prefs.setDouble('nav_dest_lat', _navigationDestination!.latitude);
+      await prefs.setDouble('nav_dest_lng', _navigationDestination!.longitude);
+    } else {
+      for (final k in ['nav_dest_id', 'nav_dest_name', 'nav_dest_category', 'nav_dest_lat', 'nav_dest_lng']) {
+        await prefs.remove(k);
+      }
+    }
+    if (_navDestination != null) {
+      await prefs.setDouble('nav_shared_dest_lat', _navDestination!.latitude);
+      await prefs.setDouble('nav_shared_dest_lng', _navDestination!.longitude);
+    } else {
+      await prefs.remove('nav_shared_dest_lat');
+      await prefs.remove('nav_shared_dest_lng');
+    }
+  }
+
+  Future<void> _restoreNavigationState() async {
+    final prefs = await SharedPreferences.getInstance();
+    final sessionId = prefs.getString('nav_session_id');
+    if (sessionId != null && mounted) {
+      setState(() {
+        _navSessionId = sessionId;
+        _navPartnerName = prefs.getString('nav_partner_name');
+      });
+      _invitePollTimer?.cancel();
+      _startNavSessionPolling();
+    }
+    final sharedLat = prefs.getDouble('nav_shared_dest_lat');
+    final sharedLng = prefs.getDouble('nav_shared_dest_lng');
+    if (sharedLat != null && sharedLng != null && mounted) {
+      setState(() => _navDestination = LatLng(sharedLat, sharedLng));
+    }
+    final wasNavigating = prefs.getBool('is_navigating') ?? false;
+    if (wasNavigating) {
+      final lat = prefs.getDouble('nav_dest_lat');
+      final lng = prefs.getDouble('nav_dest_lng');
+      if (lat != null && lng != null && mounted) {
+        await _startNavigation(Place(
+          id: prefs.getString('nav_dest_id') ?? '',
+          name: prefs.getString('nav_dest_name') ?? 'Destination',
+          category: prefs.getString('nav_dest_category') ?? 'unknown',
+          latitude: lat,
+          longitude: lng,
+        ));
+      }
+    }
+  }
 
   void _startInvitePolling() {
     _invitePollTimer?.cancel();
@@ -773,8 +868,21 @@ class _HomeScreenState extends State<HomeScreen> {
                 setState(() {
                   _navSessionId = invite.sessionId;
                   _navPartnerName = invite.creatorName;
+                  if (invite.hasDestination) {
+                    _navDestination = LatLng(invite.destinationLat!, invite.destinationLng!);
+                  }
                 });
                 _startNavSessionPolling();
+                _saveNavigationState();
+                if (invite.hasDestination && !_isNavigating) {
+                  await _startNavigation(Place(
+                    id: 'nav_${invite.sessionId}',
+                    name: invite.destinationName ?? 'Shared Destination',
+                    category: 'destination',
+                    latitude: invite.destinationLat!,
+                    longitude: invite.destinationLng!,
+                  ));
+                }
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -802,6 +910,7 @@ class _HomeScreenState extends State<HomeScreen> {
             _navSessionId!,
             _currentLatLng!.latitude,
             _currentLatLng!.longitude,
+            remainingKm: _isNavigating ? _distanceToDestination : null,
           );
         }
         final result = await _placesApi.getPartnerNavLocation(_navSessionId!);
@@ -811,7 +920,12 @@ class _HomeScreenState extends State<HomeScreen> {
           return;
         }
         if (result.status == 'active') {
-          setState(() => _partnerLocation = result.partnerLocation);
+          setState(() {
+            _partnerLocation = result.partnerLocation;
+            if (_navDestination == null && result.destination != null) {
+              _navDestination = LatLng(result.destination!.lat, result.destination!.lng);
+            }
+          });
         }
       } catch (_) {}
     });
@@ -849,13 +963,21 @@ class _HomeScreenState extends State<HomeScreen> {
                 onTap: () async {
                   Navigator.pop(ctx);
                   try {
-                    final sessionId = await _placesApi.inviteToNavigate(f.userId);
+                    final sessionId = await _placesApi.inviteToNavigate(
+                      f.userId,
+                      destinationLat: _navigationDestination?.latitude,
+                      destinationLng: _navigationDestination?.longitude,
+                      destinationName: _navigationDestination?.name.isEmpty == true
+                          ? null
+                          : _navigationDestination?.name,
+                    );
                     if (!mounted) return;
                     setState(() {
                       _navSessionId = sessionId;
                       _navPartnerName = f.label;
                     });
                     _startNavSessionPolling();
+                    _saveNavigationState();
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text('Waiting for ${f.label} to accept...')),
                     );
@@ -887,7 +1009,9 @@ class _HomeScreenState extends State<HomeScreen> {
       _navSessionId = null;
       _navPartnerName = null;
       _partnerLocation = null;
+      _navDestination = null;
     });
+    _saveNavigationState();
     _startInvitePolling();
     if (notify && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
