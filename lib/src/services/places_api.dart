@@ -372,7 +372,7 @@ class PlacesApi {
     try {
       final res = await http
           .get(uri, headers: _jsonHeaders)
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 30));
 
       return _parsePlaceList(res);
     } on TimeoutException {
