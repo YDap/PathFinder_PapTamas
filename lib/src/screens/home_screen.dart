@@ -47,13 +47,6 @@ class _HomeScreenState extends State<HomeScreen> {
   double? _maxDistanceKm;
   bool _showAllLocations = false; // Hidden by default
 
-  // All available categories
-  final List<String> _allCategories = [
-    // Natural places
-    'peak', 'lake', 'cave', 'ruin', 'spring', 'viewpoint',
-    // Amenities
-    'hotel', 'restaurant', 'fuel', 'pharmacy', 'marketplace', 'cafe', 'bar', 'museum',
-  ];
 
   // Text controllers for elevation & distance inputs
   late TextEditingController _minElevationController;
@@ -1811,34 +1804,65 @@ class _HomeScreenState extends State<HomeScreen> {
                             .bodySmall
                             ?.copyWith(color: cs.onSurfaceVariant),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 14),
+                      // Natural places sub-section
+                      Row(children: [
+                        Icon(Icons.landscape_rounded, size: 16, color: cs.primary),
+                        const SizedBox(width: 6),
+                        Text('Natural Places',
+                            style: Theme.of(ctx).textTheme.labelMedium
+                                ?.copyWith(color: cs.primary, fontWeight: FontWeight.w700)),
+                      ]),
+                      const SizedBox(height: 8),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
-                        children: _allCategories.map((category) {
-                          final isSelected =
-                              _selectedCategories.contains(category);
+                        children: ['peak','lake','cave','ruin','spring','viewpoint'].map((category) {
+                          final isSelected = _selectedCategories.contains(category);
                           return FilterChip(
                             label: Text(_formatCategoryName(category)),
                             selected: isSelected,
                             onSelected: (selected) {
                               setState(() {
-                                if (selected) {
-                                  _selectedCategories.add(category);
-                                } else {
-                                  _selectedCategories.remove(category);
-                                }
+                                if (selected) { _selectedCategories.add(category); }
+                                else { _selectedCategories.remove(category); }
                               });
                               this.setState(() {});
                             },
                             backgroundColor: Theme.of(ctx).colorScheme.surface,
-                            selectedColor:
-                                Theme.of(ctx).colorScheme.primaryContainer,
-                            side: BorderSide(
-                              color: isSelected
-                                  ? Theme.of(ctx).colorScheme.primary
-                                  : cs.outline,
-                            ),
+                            selectedColor: Theme.of(ctx).colorScheme.primaryContainer,
+                            side: BorderSide(color: isSelected ? Theme.of(ctx).colorScheme.primary : cs.outline),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 16),
+                      // Amenities sub-section
+                      Row(children: [
+                        Icon(Icons.storefront_rounded, size: 16, color: cs.primary),
+                        const SizedBox(width: 6),
+                        Text('Amenities',
+                            style: Theme.of(ctx).textTheme.labelMedium
+                                ?.copyWith(color: cs.primary, fontWeight: FontWeight.w700)),
+                      ]),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: ['hotel','restaurant','fuel','pharmacy','marketplace','cafe','bar','museum'].map((category) {
+                          final isSelected = _selectedCategories.contains(category);
+                          return FilterChip(
+                            label: Text(_formatCategoryName(category)),
+                            selected: isSelected,
+                            onSelected: (selected) {
+                              setState(() {
+                                if (selected) { _selectedCategories.add(category); }
+                                else { _selectedCategories.remove(category); }
+                              });
+                              this.setState(() {});
+                            },
+                            backgroundColor: Theme.of(ctx).colorScheme.surface,
+                            selectedColor: Theme.of(ctx).colorScheme.primaryContainer,
+                            side: BorderSide(color: isSelected ? Theme.of(ctx).colorScheme.primary : cs.outline),
                           );
                         }).toList(),
                       ),
