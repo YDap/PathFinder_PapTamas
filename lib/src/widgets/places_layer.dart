@@ -9,6 +9,11 @@ import '../services/places_api.dart';
 import '../screens/posts_screen.dart';
 import 'create_post_sheet.dart';
 
+// Categories considered "interesting waypoints" during navigation
+const _waypointCategories = {
+  'peak', 'lake', 'cave', 'cave_entrance', 'ruin', 'spring', 'viewpoint',
+};
+
 class PlacesLayer extends StatefulWidget {
   final MapController mapController;
   final PlacesApi api;
@@ -21,6 +26,7 @@ class PlacesLayer extends StatefulWidget {
   final bool showLocations;
   final bool isAdmin;
   final Function(Place)? onNavigate;
+  final List<LatLng> routePolyline;
 
   const PlacesLayer({
     super.key,
@@ -35,6 +41,7 @@ class PlacesLayer extends StatefulWidget {
     this.showLocations = true,
     this.isAdmin = false,
     this.onNavigate,
+    this.routePolyline = const [],
   });
 
   @override
@@ -44,11 +51,17 @@ class PlacesLayer extends StatefulWidget {
 class _PlacesLayerState extends State<PlacesLayer> {
   StreamSubscription<MapEvent>? _sub;
   Timer? _debounce;
-  List<Place> _places = const [];
+
+  // Accumulating cache: places are added but never removed mid-session.
+  // This prevents markers from flickering/disappearing during zoom or pan.
+  final Map<String, Place> _cache = {};
+
   bool _loading = false;
   Object? _lastError;
 
   Place? _selected;
+
+  static const int _maxCacheSize = 4000;
 
   @override
   void initState() {
@@ -73,15 +86,19 @@ class _PlacesLayerState extends State<PlacesLayer> {
 
   void _scheduleReload() {
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 350), _loadNow);
+    _debounce = Timer(const Duration(milliseconds: 300), _loadNow);
   }
 
   Future<void> _loadNow() async {
     try {
       final bounds = widget.mapController.camera.visibleBounds;
-
       final sw = bounds.southWest;
       final ne = bounds.northEast;
+
+      // Fetch a slightly larger area (25% padding each side) so nearby
+      // places are already cached before the user pans to them.
+      final latPad = (ne.latitude  - sw.latitude)  * 0.25;
+      final lngPad = (ne.longitude - sw.longitude) * 0.25;
 
       setState(() {
         _loading = true;
@@ -89,14 +106,21 @@ class _PlacesLayerState extends State<PlacesLayer> {
       });
 
       final data = await widget.api.fetchInBounds(
-        southWest: LatLng(sw.latitude, sw.longitude),
-        northEast: LatLng(ne.latitude, ne.longitude),
+        southWest: LatLng(sw.latitude  - latPad, sw.longitude - lngPad),
+        northEast: LatLng(ne.latitude  + latPad, ne.longitude + lngPad),
         limit: widget.limit,
       );
 
       if (!mounted) return;
       setState(() {
-        _places = data;
+        for (final p in data) {
+          _cache[p.id] = p;
+        }
+        // Prevent unbounded growth: drop oldest entries when cache is large.
+        if (_cache.length > _maxCacheSize) {
+          final toRemove = _cache.keys.take(_cache.length - _maxCacheSize).toList();
+          for (final k in toRemove) { _cache.remove(k); }
+        }
         _loading = false;
       });
     } catch (e) {
@@ -109,54 +133,59 @@ class _PlacesLayerState extends State<PlacesLayer> {
   }
 
   Color _colorFor(String category) {
-    switch (category.toLowerCase()) {
-      case 'lake':
-        return Colors.blueAccent;
-      case 'cave':
-      case 'caves':
-        return Colors.brown;
-      case 'ruin':
-      case 'ruins':
-        return Colors.redAccent;
-      case 'peak':
-        return Colors.deepPurple;
-      case 'spring':
-        return Colors.teal;
-      case 'viewpoint':
-        return Colors.indigo;
-      default:
-        return Colors.orange;
+    switch (_normalizeCategory(category)) {
+      case 'lake':        return Colors.blueAccent;
+      case 'cave':        return Colors.brown;
+      case 'ruin':        return Colors.redAccent;
+      case 'peak':        return Colors.deepPurple;
+      case 'spring':      return Colors.teal;
+      case 'viewpoint':   return Colors.indigo;
+      case 'hotel':       return Colors.purple;
+      case 'restaurant':  return Colors.red.shade700;
+      case 'fuel':        return Colors.amber.shade700;
+      case 'pharmacy':    return const Color(0xFF00897B);
+      case 'marketplace': return Colors.indigo.shade700;
+      case 'cafe':        return const Color(0xFF795548);
+      case 'bar':         return Colors.pink.shade700;
+      case 'museum':      return Colors.deepPurple.shade700;
+      default:            return Colors.orange;
     }
   }
 
   IconData _iconFor(String category) {
-    switch (category.toLowerCase()) {
-      case 'lake':
-        return Icons.pool; // Water body icon
-      case 'cave':
-      case 'caves':
-        return Icons.terrain; // Cave/terrain icon
-      case 'ruin':
-      case 'ruins':
-        return Icons.account_balance; // Historical/ruins icon
-      case 'peak':
-        return Icons.landscape; // Mountain peak icon
-      case 'spring':
-        return Icons.water_drop; // Water spring icon
-      case 'viewpoint':
-        return Icons.visibility; // Viewpoint icon
-      default:
-        return Icons.place; // Generic location icon
+    switch (_normalizeCategory(category)) {
+      case 'lake':        return Icons.water_rounded;
+      case 'cave':        return Icons.terrain;
+      case 'ruin':        return Icons.account_balance;
+      case 'peak':        return Icons.landscape;
+      case 'spring':      return Icons.water_drop;
+      case 'viewpoint':   return Icons.visibility;
+      case 'hotel':       return Icons.hotel_rounded;
+      case 'restaurant':  return Icons.restaurant_rounded;
+      case 'fuel':        return Icons.local_gas_station_rounded;
+      case 'pharmacy':    return Icons.local_pharmacy_rounded;
+      case 'marketplace': return Icons.store_rounded;
+      case 'cafe':        return Icons.local_cafe_rounded;
+      case 'bar':         return Icons.local_bar_rounded;
+      case 'museum':      return Icons.museum_rounded;
+      default:            return Icons.place;
     }
   }
 
-  /// Normalize category names for filtering (handle plural/singular variants)
+  /// Normalize category names for filtering (handle plural/singular/OSM variants)
   String _normalizeCategory(String category) {
-    final cat = category.toLowerCase();
-    // Map plural/alternate forms to canonical forms
-    if (cat == 'caves' || cat == 'cave_entrance') return 'cave';
-    if (cat == 'ruins' || cat == 'archaeological_site') return 'ruin';
-    return cat;
+    switch (category.toLowerCase()) {
+      case 'caves':
+      case 'cave_entrance': return 'cave';
+      case 'ruins':
+      case 'archaeological_site': return 'ruin';
+      case 'fast_food': return 'restaurant';
+      case 'supermarket':
+      case 'convenience': return 'marketplace';
+      case 'guest_house':
+      case 'hostel': return 'hotel';
+      default: return category.toLowerCase();
+    }
   }
 
   Future<void> _openPlaceSheet(Place p) async {
@@ -388,62 +417,83 @@ class _PlacesLayerState extends State<PlacesLayer> {
     }
   }
 
+  /// Returns true if [p] is within 600 m of any sampled point on the route.
+  bool _isNearRoute(Place p) {
+    if (widget.routePolyline.isEmpty) return false;
+    const maxDistM = 600.0;
+    const dist = Distance();
+    final placeLatLng = LatLng(p.latitude, p.longitude);
+    // Sample every 4th point for performance
+    for (var i = 0; i < widget.routePolyline.length; i += 4) {
+      if (dist.as(LengthUnit.Meter, widget.routePolyline[i], placeLatLng) < maxDistM) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
-    // If locations should be hidden, don't show any markers
+    final hasRoute = widget.routePolyline.isNotEmpty;
+
+    // Filter cache to places currently visible on screen (with a small buffer
+    // so markers don't pop in at the very edge while panning).
+    final bounds   = widget.mapController.camera.visibleBounds;
+    final latPad   = (bounds.northEast.latitude  - bounds.southWest.latitude)  * 0.1;
+    final lngPad   = (bounds.northEast.longitude - bounds.southWest.longitude) * 0.1;
+    final visible  = _cache.values.where((p) =>
+        p.latitude  >= bounds.southWest.latitude  - latPad &&
+        p.latitude  <= bounds.northEast.latitude  + latPad &&
+        p.longitude >= bounds.southWest.longitude - lngPad &&
+        p.longitude <= bounds.northEast.longitude + lngPad,
+    );
+
+    // Waypoints: natural places near the active route, shown even when filter is off
+    final waypointPlaces = hasRoute
+        ? visible
+            .where((p) =>
+                _waypointCategories.contains(_normalizeCategory(p.category)) &&
+                _isNearRoute(p))
+            .toList()
+        : <Place>[];
+
+    // If locations should be hidden (and no route), only show waypoints
     if (!widget.showLocations) {
-      return Stack(
-        children: [
-          if (_loading)
-            const Positioned(
-              right: 12,
-              top: 12,
-              child: _LoadingChip(),
-            ),
-          if (_lastError != null)
-            Positioned(
-              right: 12,
-              top: 12,
-              child: _ErrorChip(msg: _lastError.toString()),
-            ),
-        ],
-      );
+      if (waypointPlaces.isEmpty) {
+        return Stack(
+          children: [
+            if (_loading)
+              const Positioned(right: 12, top: 12, child: _LoadingChip()),
+            if (_lastError != null)
+              Positioned(
+                  right: 12, top: 12, child: _ErrorChip(msg: _lastError.toString())),
+          ],
+        );
+      }
     }
 
-    // Apply filters to places
-    final filteredPlaces = _places.where((p) {
-      // Normalize the place category for comparison
-      final normalizedPlaceCategory = _normalizeCategory(p.category);
-
-      // If categories are selected, only show places in those categories
-      if (widget.selectedCategories.isNotEmpty &&
-          !widget.selectedCategories.contains(normalizedPlaceCategory)) {
-        return false;
-      }
-
-      // Distance filter
-      if (widget.maxDistanceKm != null && widget.currentLocation != null) {
-        final dist = const Distance().as(LengthUnit.Kilometer,
-            widget.currentLocation!, LatLng(p.latitude, p.longitude));
-        if (dist > widget.maxDistanceKm!) {
-          return false;
-        }
-      }
-
-      // Apply elevation filters — places with no elevation data are excluded
-      if (widget.minElevation != null) {
-        if (p.elevationM == null || p.elevationM! < widget.minElevation!) {
-          return false;
-        }
-      }
-      if (widget.maxElevation != null) {
-        if (p.elevationM == null || p.elevationM! > widget.maxElevation!) {
-          return false;
-        }
-      }
-
-      return true;
-    }).toList();
+    // Apply user filters to visible places (empty list when showLocations is off)
+    final filteredPlaces = widget.showLocations
+        ? visible.where((p) {
+            final normalizedPlaceCategory = _normalizeCategory(p.category);
+            if (widget.selectedCategories.isNotEmpty &&
+                !widget.selectedCategories.contains(normalizedPlaceCategory)) {
+              return false;
+            }
+            if (widget.maxDistanceKm != null && widget.currentLocation != null) {
+              final dist = const Distance().as(LengthUnit.Kilometer,
+                  widget.currentLocation!, LatLng(p.latitude, p.longitude));
+              if (dist > widget.maxDistanceKm!) return false;
+            }
+            if (widget.minElevation != null) {
+              if (p.elevationM == null || p.elevationM! < widget.minElevation!) return false;
+            }
+            if (widget.maxElevation != null) {
+              if (p.elevationM == null || p.elevationM! > widget.maxElevation!) return false;
+            }
+            return true;
+          }).toList()
+        : <Place>[];
 
     final markers = filteredPlaces.map((p) {
       final isSelected = _selected?.id == p.id;
@@ -479,21 +529,44 @@ class _PlacesLayerState extends State<PlacesLayer> {
       );
     }).toList();
 
+    // Build waypoint markers — shown on top of filtered markers, with a
+    // pulsing yellow border so they stand out from regular filtered pins.
+    final waypointMarkers = waypointPlaces
+        .where((p) => !filteredPlaces.any((fp) => fp.id == p.id))
+        .map((p) {
+      final color = _colorFor(p.category);
+      final icon  = _iconFor(p.category);
+      return Marker(
+        point: LatLng(p.latitude, p.longitude),
+        width: 36,
+        height: 36,
+        child: GestureDetector(
+          onTap: () => _openPlaceSheet(p),
+          child: Tooltip(
+            message: p.name.isEmpty ? 'Nearby' : p.name,
+            waitDuration: const Duration(milliseconds: 200),
+            child: Container(
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.amber, width: 2.5),
+                boxShadow: const [BoxShadow(blurRadius: 6, color: Colors.black38)],
+              ),
+              child: Icon(icon, color: Colors.white, size: 18),
+            ),
+          ),
+        ),
+      );
+    }).toList();
+
     return Stack(
       children: [
-        MarkerLayer(markers: markers),
+        MarkerLayer(markers: [...markers, ...waypointMarkers]),
         if (_loading)
-          const Positioned(
-            right: 12,
-            top: 12,
-            child: _LoadingChip(),
-          ),
+          const Positioned(right: 12, top: 12, child: _LoadingChip()),
         if (_lastError != null)
           Positioned(
-            right: 12,
-            top: 12,
-            child: _ErrorChip(msg: _lastError.toString()),
-          ),
+              right: 12, top: 12, child: _ErrorChip(msg: _lastError.toString())),
       ],
     );
   }

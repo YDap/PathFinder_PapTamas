@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -47,12 +48,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // All available categories
   final List<String> _allCategories = [
-    'lake',
-    'cave',
-    'ruin',
-    'peak',
-    'spring',
-    'viewpoint',
+    // Natural places
+    'peak', 'lake', 'cave', 'ruin', 'spring', 'viewpoint',
+    // Amenities
+    'hotel', 'restaurant', 'fuel', 'pharmacy', 'marketplace', 'cafe', 'bar', 'museum',
   ];
 
   // Text controllers for elevation & distance inputs
@@ -72,6 +71,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _navSessionId;
   String? _navPartnerName;
   PartnerLocation? _partnerLocation;
+  LatLng? _navDestination;       // shared destination (to draw partner's line)
   Timer? _navPollTimer;
   Timer? _invitePollTimer;
 
@@ -124,6 +124,23 @@ class _HomeScreenState extends State<HomeScreen> {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      floatingActionButton: _isNavigating
+          ? null
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FloatingActionButton.small(
+                  heroTag: 'fab_help',
+                  tooltip: 'Help & Legend',
+                  onPressed: () => _showHelpDialog(context),
+                  backgroundColor: cs.secondaryContainer,
+                  foregroundColor: cs.onSecondaryContainer,
+                  child: const Text('?',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
       body: Stack(
         children: [
           // The animated location indicator is defined below
@@ -166,8 +183,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     _maxDistanceKm != null,
                 onNavigate: _startNavigation,
                 isAdmin: _isAdmin,
+                routePolyline: _routePolyline,
               ),
-              // Navigation route polyline
+              // Navigation route polyline (own — blue)
               if (_routePolyline.isNotEmpty)
                 PolylineLayer(
                   polylines: [
@@ -177,6 +195,23 @@ class _HomeScreenState extends State<HomeScreen> {
                       strokeWidth: 4,
                       borderStrokeWidth: 2,
                       borderColor: Colors.white,
+                    ),
+                  ],
+                ),
+              // Partner route line: from partner's GPS to shared destination (orange, dashed)
+              if (_partnerLocation != null && _navDestination != null)
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: [
+                        LatLng(_partnerLocation!.lat, _partnerLocation!.lng),
+                        _navDestination!,
+                      ],
+                      color: Colors.orange,
+                      strokeWidth: 3,
+                      borderStrokeWidth: 1.5,
+                      borderColor: Colors.white,
+                      pattern: StrokePattern.dashed(segments: const [12, 6]),
                     ),
                   ],
                 ),
@@ -253,6 +288,20 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
+          // + Add place FAB (bottom left)
+          if (!_isNavigating)
+            Positioned(
+              bottom: 16,
+              left: 16,
+              child: SafeArea(
+                child: FloatingActionButton.small(
+                  heroTag: 'fab_add',
+                  tooltip: 'Add a new place',
+                  onPressed: () => _showAddLocationSheet(context),
+                  child: const Icon(Icons.add),
+                ),
+              ),
+            ),
           // Hint when no locations are shown
           if (!_showAllLocations &&
               _selectedCategories.isEmpty &&
@@ -1105,6 +1154,412 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _showAddLocationSheet(BuildContext context) {
+    final nameCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
+    String? selectedCategory;
+    File? pickedImage;
+    double? pickedLat = _currentLatLng?.latitude;
+    double? pickedLng = _currentLatLng?.longitude;
+    bool submitting = false;
+
+    const categories = [
+      ('peak',         'Peak / Mountain',  Icons.landscape_rounded),
+      ('lake',         'Lake',             Icons.water_rounded),
+      ('cave_entrance','Cave',             Icons.terrain_rounded),
+      ('ruin',         'Ruin / Castle',    Icons.account_balance_rounded),
+      ('spring',       'Spring',           Icons.water_drop_rounded),
+      ('viewpoint',    'Viewpoint',        Icons.remove_red_eye_rounded),
+      ('hotel',        'Hotel',            Icons.hotel_rounded),
+      ('restaurant',   'Restaurant / Food',Icons.restaurant_rounded),
+      ('fuel',         'Gas Station',      Icons.local_gas_station_rounded),
+      ('pharmacy',     'Pharmacy',         Icons.local_pharmacy_rounded),
+      ('marketplace',  'Market',           Icons.store_rounded),
+      ('cafe',         'Café',             Icons.local_cafe_rounded),
+      ('bar',          'Bar',              Icons.local_bar_rounded),
+      ('museum',       'Museum',           Icons.museum_rounded),
+    ];
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            Future<void> submit() async {
+              if (nameCtrl.text.trim().isEmpty) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(content: Text('Please enter a name.')));
+                return;
+              }
+              if (selectedCategory == null) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(content: Text('Please select a category.')));
+                return;
+              }
+              if (pickedLat == null || pickedLng == null) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(content: Text('Please set the location.')));
+                return;
+              }
+              setSheetState(() => submitting = true);
+              try {
+                await _placesApi.submitPlace(
+                  name: nameCtrl.text.trim(),
+                  category: selectedCategory!,
+                  lat: pickedLat!,
+                  lng: pickedLng!,
+                  description: descCtrl.text.trim().isEmpty ? null : descCtrl.text.trim(),
+                  image: pickedImage,
+                );
+                if (ctx.mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Place submitted! It will appear on the map shortly.')),
+                  );
+                }
+              } catch (e) {
+                if (ctx.mounted) {
+                  setSheetState(() => submitting = false);
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+                  );
+                }
+              }
+            }
+
+            return DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: 0.85,
+              minChildSize: 0.5,
+              maxChildSize: 0.95,
+              builder: (_, scrollCtl) => Padding(
+                padding: EdgeInsets.fromLTRB(
+                    16, 12, 16, MediaQuery.of(ctx).viewInsets.bottom + 16),
+                child: ListView(
+                  controller: scrollCtl,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40, height: 4,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                            color: cs.outlineVariant,
+                            borderRadius: BorderRadius.circular(999)),
+                      ),
+                    ),
+                    Text('Add a New Place',
+                        style: Theme.of(ctx).textTheme.headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 20),
+                    // Name
+                    TextField(
+                      controller: nameCtrl,
+                      decoration: InputDecoration(
+                        labelText: 'Place name *',
+                        hintText: 'e.g. Eagle Rock',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // Description
+                    TextField(
+                      controller: descCtrl,
+                      maxLines: 2,
+                      decoration: InputDecoration(
+                        labelText: 'Description (optional)',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // Category
+                    Text('Category *',
+                        style: Theme.of(ctx).textTheme.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: categories.map((c) {
+                        final selected = selectedCategory == c.$1;
+                        return FilterChip(
+                          avatar: Icon(c.$3, size: 16,
+                              color: selected ? cs.onPrimaryContainer : cs.onSurfaceVariant),
+                          label: Text(c.$2),
+                          selected: selected,
+                          onSelected: (_) => setSheetState(() => selectedCategory = c.$1),
+                          selectedColor: cs.primaryContainer,
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+                    // Location
+                    Text('Location *',
+                        style: Theme.of(ctx).textTheme.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            await _ensureLocationAndCenter(silent: true);
+                            if (_currentLatLng != null) {
+                              setSheetState(() {
+                                pickedLat = _currentLatLng!.latitude;
+                                pickedLng = _currentLatLng!.longitude;
+                              });
+                            }
+                          },
+                          icon: const Icon(Icons.my_location_rounded, size: 18),
+                          label: const Text('Use my location'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      if (pickedLat != null)
+                        Expanded(
+                          child: Text(
+                            '${pickedLat!.toStringAsFixed(5)}, ${pickedLng!.toStringAsFixed(5)}',
+                            style: Theme.of(ctx).textTheme.bodySmall
+                                ?.copyWith(color: cs.onSurfaceVariant),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        )
+                      else
+                        Expanded(
+                          child: Text('No location set',
+                              style: Theme.of(ctx).textTheme.bodySmall
+                                  ?.copyWith(color: cs.error)),
+                        ),
+                    ]),
+                    const SizedBox(height: 16),
+                    // Photo
+                    Text('Photo (optional)',
+                        style: Theme.of(ctx).textTheme.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    if (pickedImage != null)
+                      Stack(children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.file(pickedImage!,
+                              height: 160, width: double.infinity, fit: BoxFit.cover),
+                        ),
+                        Positioned(
+                          top: 6, right: 6,
+                          child: CircleAvatar(
+                            radius: 16,
+                            backgroundColor: Colors.black54,
+                            child: IconButton(
+                              icon: const Icon(Icons.close, size: 16, color: Colors.white),
+                              onPressed: () => setSheetState(() => pickedImage = null),
+                              padding: EdgeInsets.zero,
+                            ),
+                          ),
+                        ),
+                      ])
+                    else
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          final source = await showDialog<ImageSource>(
+                            context: ctx,
+                            builder: (d) => AlertDialog(
+                              title: const Text('Choose source'),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(d, ImageSource.camera),
+                                    child: const Text('Camera')),
+                                TextButton(onPressed: () => Navigator.pop(d, ImageSource.gallery),
+                                    child: const Text('Gallery')),
+                              ],
+                            ),
+                          );
+                          if (source == null) return;
+                          final picked = await ImagePicker().pickImage(
+                              source: source, imageQuality: 80, maxWidth: 1200);
+                          if (picked != null) {
+                            setSheetState(() => pickedImage = File(picked.path));
+                          }
+                        },
+                        icon: const Icon(Icons.add_a_photo_rounded),
+                        label: const Text('Add photo'),
+                      ),
+                    const SizedBox(height: 24),
+                    // Submit
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: submitting ? null : submit,
+                        icon: submitting
+                            ? const SizedBox(width: 18, height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.send_rounded),
+                        label: Text(submitting ? 'Submitting…' : 'Submit Place'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showHelpDialog(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+
+        Widget section(String title) => Padding(
+              padding: const EdgeInsets.fromLTRB(0, 20, 0, 8),
+              child: Text(title,
+                  style: Theme.of(ctx)
+                      .textTheme
+                      .titleSmall
+                      ?.copyWith(color: cs.primary, fontWeight: FontWeight.w700)),
+            );
+
+        Widget item(IconData icon, String label, String desc, {Color? color}) =>
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(icon, color: color ?? cs.onSurface, size: 22),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(label,
+                            style: const TextStyle(fontWeight: FontWeight.w600)),
+                        Text(desc,
+                            style: TextStyle(
+                                color: cs.onSurfaceVariant, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+
+        Widget colorDot(Color c, String label, String desc) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(color: c, shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 1.5)),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(label,
+                            style: const TextStyle(fontWeight: FontWeight.w600)),
+                        Text(desc,
+                            style: TextStyle(
+                                color: cs.onSurfaceVariant, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.75,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          builder: (_, scrollCtl) => Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+            child: ListView(
+              controller: scrollCtl,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                        color: cs.outlineVariant,
+                        borderRadius: BorderRadius.circular(999)),
+                  ),
+                ),
+                Text('Help & Legend',
+                    style: Theme.of(ctx)
+                        .textTheme
+                        .headlineSmall
+                        ?.copyWith(fontWeight: FontWeight.w700)),
+                section('Top Bar Buttons'),
+                item(Icons.location_on_outlined, 'Current Location',
+                    'Centers the map on your GPS position.'),
+                item(Icons.tune_rounded, 'Filters',
+                    'Filter places by type, elevation range, or distance from you. Applying a filter zooms the map out to show results.'),
+                item(Icons.auto_awesome_rounded, 'AI Assistant',
+                    'Ask the AI to find places for you in natural language — e.g. "show me lakes above 1500m".'),
+                item(Icons.person_rounded, 'Profile',
+                    'View your profile, change your photo, open Friends, send an S.O.S, or switch theme.'),
+                section('Map Icons — Natural Places'),
+                colorDot(Colors.blue, 'Lake', 'A natural lake or reservoir.'),
+                colorDot(Colors.brown, 'Cave', 'A cave or grotto entrance.'),
+                colorDot(Colors.grey, 'Ruin / Castle', 'Historical ruins or castle remains.'),
+                colorDot(Colors.orange, 'Peak', 'A mountain summit or peak.'),
+                colorDot(Colors.cyan, 'Spring', 'A natural water spring.'),
+                colorDot(Colors.green, 'Viewpoint', 'A scenic viewpoint or panorama.'),
+                section('Map Icons — Amenities'),
+                colorDot(Colors.purple, 'Hotel', 'Accommodation — hotel, hostel or guesthouse.'),
+                colorDot(Colors.red, 'Restaurant / Food', 'Restaurants, fast food and eateries.'),
+                colorDot(Colors.amber, 'Gas Station', 'Fuel stations for vehicles.'),
+                colorDot(Colors.teal, 'Pharmacy', 'Drug stores and pharmacies.'),
+                colorDot(Colors.indigo, 'Market', 'Supermarkets and grocery stores.'),
+                colorDot(const Color(0xFF795548), 'Café', 'Coffee shops and cafés.'),
+                colorDot(Colors.pink, 'Bar', 'Bars and pubs.'),
+                colorDot(Colors.deepPurple, 'Museum', 'Museums and cultural sites.'),
+                section('Navigation'),
+                item(Icons.navigation_rounded, 'Navigate',
+                    'Tap any place marker and press Navigate to get a hiking route to it. Your position is kept centered while navigating.'),
+                item(Icons.my_location_rounded, 'Re-center',
+                    'If you pan the map during navigation this button reappears — tap it to re-lock the map to your position.'),
+                item(Icons.people_rounded, 'Navigate Together',
+                    'While navigating, invite a friend to join. They\'ll get a notification, and once they accept you can both see each other\'s live position and remaining distance on the route.'),
+                section('Other'),
+                item(Icons.add, 'Add a Place',
+                    'Tap the + button (bottom-left) to suggest a new location. Add a photo, choose the category and drop a pin on the map.'),
+                item(Icons.emergency_share_rounded, 'S.O.S',
+                    'Found in your Profile. Shares your current GPS coordinates so you can call for help.'),
+                item(Icons.people_rounded, 'Friends',
+                    'Found in your Profile. Search for users, send friend requests and manage your friends list.'),
+                const SizedBox(height: 8),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Got it'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   void _openFiltersSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -1480,7 +1935,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
                       // Close Button
                       FilledButton(
-                        onPressed: () => Navigator.pop(ctx),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          final hasFilters = _selectedCategories.isNotEmpty ||
+                              _minElevation != null ||
+                              _maxElevation != null ||
+                              _maxDistanceKm != null ||
+                              _showAllLocations;
+                          if (hasFilters) {
+                            final center = _currentLatLng ?? _mapController.camera.center;
+                            final currentZoom = _mapController.camera.zoom;
+                            final targetZoom = currentZoom > 11.5 ? 11.5 : currentZoom;
+                            _mapController.move(center, targetZoom);
+                          }
+                        },
                         child: const Text('Apply Filters'),
                       ),
                     ],
@@ -1495,11 +1963,26 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   String _formatCategoryName(String category) {
-    return category
-        .replaceAll('_', ' ')
-        .split(' ')
-        .map((word) => word[0].toUpperCase() + word.substring(1))
-        .join(' ');
+    const names = {
+      'peak': 'Peak',
+      'lake': 'Lake',
+      'cave': 'Cave',
+      'ruin': 'Ruin / Castle',
+      'spring': 'Spring',
+      'viewpoint': 'Viewpoint',
+      'hotel': 'Hotel',
+      'restaurant': 'Restaurant',
+      'fuel': 'Gas Station',
+      'pharmacy': 'Pharmacy',
+      'marketplace': 'Market',
+      'cafe': 'Café',
+      'bar': 'Bar',
+      'museum': 'Museum',
+    };
+    return names[category] ??
+        category.replaceAll('_', ' ').split(' ')
+            .map((w) => w[0].toUpperCase() + w.substring(1))
+            .join(' ');
   }
 }
 

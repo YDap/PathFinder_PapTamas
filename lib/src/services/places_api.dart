@@ -209,32 +209,56 @@ class NavInvite {
   final String creatorId;
   final String creatorName;
   final String? creatorImage;
+  final double? destinationLat;
+  final double? destinationLng;
+  final String? destinationName;
 
   const NavInvite({
     required this.sessionId,
     required this.creatorId,
     required this.creatorName,
     this.creatorImage,
+    this.destinationLat,
+    this.destinationLng,
+    this.destinationName,
   });
+
+  bool get hasDestination => destinationLat != null && destinationLng != null;
 
   factory NavInvite.fromJson(Map<String, dynamic> j) => NavInvite(
         sessionId: j['session_id'].toString(),
         creatorId: j['creator_id'].toString(),
         creatorName: j['creator_name']?.toString() ?? 'Someone',
         creatorImage: j['creator_image']?.toString(),
+        destinationLat: j['destination_lat'] == null
+            ? null
+            : (j['destination_lat'] as num).toDouble(),
+        destinationLng: j['destination_lng'] == null
+            ? null
+            : (j['destination_lng'] as num).toDouble(),
+        destinationName: j['destination_name']?.toString(),
       );
 }
 
 class PartnerLocation {
   final double lat;
   final double lng;
+  final double? remainingKm;
   final DateTime updatedAt;
 
-  const PartnerLocation({required this.lat, required this.lng, required this.updatedAt});
+  const PartnerLocation({
+    required this.lat,
+    required this.lng,
+    this.remainingKm,
+    required this.updatedAt,
+  });
 
   factory PartnerLocation.fromJson(Map<String, dynamic> j) => PartnerLocation(
         lat: (j['lat'] as num).toDouble(),
         lng: (j['lng'] as num).toDouble(),
+        remainingKm: j['remaining_km'] == null
+            ? null
+            : (j['remaining_km'] as num).toDouble(),
         updatedAt: DateTime.parse(j['updated_at'].toString()),
       );
 }
@@ -660,11 +684,51 @@ class PlacesApi {
 
   // ── Navigate Together ────────────────────────────────────
 
-  Future<String> inviteToNavigate(String partnerUserId) async {
+  /// POST /places/suggest  (multipart, requires auth)
+  Future<void> submitPlace({
+    required String name,
+    required String category,
+    required double lat,
+    required double lng,
+    String? description,
+    File? image,
+  }) async {
     final token = await _getToken();
+    final uri = Uri.parse('$baseUrl/places/suggest');
+    final request = http.MultipartRequest('POST', uri)
+      ..headers['Authorization'] = 'Bearer $token'
+      ..fields['name'] = name
+      ..fields['category'] = category
+      ..fields['lat'] = lat.toString()
+      ..fields['lng'] = lng.toString();
+    if (description != null && description.isNotEmpty) {
+      request.fields['description'] = description;
+    }
+    if (image != null) {
+      request.files.add(await http.MultipartFile.fromPath('image', image.path));
+    }
+    final streamed = await request.send().timeout(const Duration(seconds: 30));
+    final res = await http.Response.fromStream(streamed);
+    if (res.statusCode != 200) {
+      final body = json.decode(res.body) as Map<String, dynamic>;
+      throw Exception(body['error'] ?? 'Failed to submit place');
+    }
+  }
+
+  Future<String> inviteToNavigate(
+    String partnerUserId, {
+    double? destinationLat,
+    double? destinationLng,
+    String? destinationName,
+  }) async {
+    final token = await _getToken();
+    final body = <String, dynamic>{'partnerUserId': partnerUserId};
+    if (destinationLat != null) body['destinationLat'] = destinationLat;
+    if (destinationLng != null) body['destinationLng'] = destinationLng;
+    if (destinationName != null) body['destinationName'] = destinationName;
     final res = await http.post(Uri.parse('$baseUrl/navigate/invite'),
         headers: {..._jsonHeaders, 'Authorization': 'Bearer $token'},
-        body: json.encode({'partnerUserId': partnerUserId}));
+        body: json.encode(body));
     if (res.statusCode != 200) throw Exception('Failed to send invite');
     return (json.decode(res.body) as Map<String, dynamic>)['session_id'].toString();
   }
@@ -691,28 +755,44 @@ class PlacesApi {
         headers: {..._jsonHeaders, 'Authorization': 'Bearer $token'});
   }
 
-  Future<void> updateNavLocation(String sessionId, double lat, double lng) async {
+  Future<void> updateNavLocation(String sessionId, double lat, double lng,
+      {double? remainingKm}) async {
     final token = await _getToken();
+    final body = <String, dynamic>{'sessionId': sessionId, 'lat': lat, 'lng': lng};
+    if (remainingKm != null) body['remainingKm'] = remainingKm;
     await http.put(Uri.parse('$baseUrl/navigate/location'),
         headers: {..._jsonHeaders, 'Authorization': 'Bearer $token'},
-        body: json.encode({'sessionId': sessionId, 'lat': lat, 'lng': lng}));
+        body: json.encode(body));
   }
 
-  /// Returns { status: 'active'|'invited'|'ended', partner_location: PartnerLocation? }
-  Future<({String status, PartnerLocation? partnerLocation})> getPartnerNavLocation(
-      String sessionId) async {
+  /// Returns { status, partnerLocation, destination }
+  Future<({
+    String status,
+    PartnerLocation? partnerLocation,
+    ({double lat, double lng, String? name})? destination,
+  })> getPartnerNavLocation(String sessionId) async {
     final token = await _getToken();
     final res = await http.get(
         Uri.parse('$baseUrl/navigate/partner-location/$sessionId'),
         headers: {..._jsonHeaders, 'Authorization': 'Bearer $token'});
-    if (res.statusCode != 200) return (status: 'ended', partnerLocation: null);
+    if (res.statusCode != 200) {
+      return (status: 'ended', partnerLocation: null, destination: null);
+    }
     final body = json.decode(res.body) as Map<String, dynamic>;
     final status = body['status']?.toString() ?? 'ended';
     final locJson = body['partner_location'];
     final loc = locJson != null
         ? PartnerLocation.fromJson(locJson as Map<String, dynamic>)
         : null;
-    return (status: status, partnerLocation: loc);
+    final destJson = body['destination'] as Map<String, dynamic>?;
+    final dest = destJson != null
+        ? (
+            lat: (destJson['lat'] as num).toDouble(),
+            lng: (destJson['lng'] as num).toDouble(),
+            name: destJson['name']?.toString(),
+          )
+        : null;
+    return (status: status, partnerLocation: loc, destination: dest);
   }
 
   Future<void> endNavSession(String sessionId) async {
