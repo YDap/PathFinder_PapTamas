@@ -392,25 +392,13 @@ class PlacesLayerState extends State<PlacesLayer> {
                         foregroundColor: Theme.of(ctx).colorScheme.error,
                       ),
                       onPressed: () async {
-                        final confirmed = await showDialog<bool>(
+                        final reason = await showDialog<String>(
                           context: ctx,
-                          builder: (d) => AlertDialog(
-                            title: const Text('Report Place'),
-                            content: const Text(
-                                'Report this place as inappropriate or incorrect?'),
-                            actions: [
-                              TextButton(
-                                  onPressed: () => Navigator.pop(d, false),
-                                  child: const Text('Cancel')),
-                              FilledButton(
-                                  onPressed: () => Navigator.pop(d, true),
-                                  child: const Text('Report')),
-                            ],
-                          ),
+                          builder: (d) => _ReportReasonDialog(),
                         );
-                        if (confirmed != true) return;
+                        if (reason == null) return;
                         try {
-                          await widget.api.reportPlace(p.id);
+                          await widget.api.reportPlace(p.id, reason: reason);
                           if (mounted) {
                             ScaffoldMessenger.of(ctx).showSnackBar(
                               const SnackBar(content: Text('Place reported. Thank you.')),
@@ -612,6 +600,60 @@ class PlacesLayerState extends State<PlacesLayer> {
         if (_lastError != null)
           Positioned(
               right: 12, top: 12, child: _ErrorChip(msg: _lastError.toString())),
+      ],
+    );
+  }
+}
+
+class _ReportReasonDialog extends StatefulWidget {
+  @override
+  State<_ReportReasonDialog> createState() => _ReportReasonDialogState();
+}
+
+class _ReportReasonDialogState extends State<_ReportReasonDialog> {
+  static const _reasons = [
+    'Doesn\'t exist / wrong location',
+    'Wrong category (not a lake, peak, etc.)',
+    'Spam or fake place',
+    'Inappropriate or offensive',
+    'Duplicate of another place',
+    'Other',
+  ];
+
+  String? _selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Report Place'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Why are you reporting this place?'),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _reasons
+                .map((r) => ChoiceChip(
+                      label: Text(r, style: const TextStyle(fontSize: 13)),
+                      selected: _selected == r,
+                      onSelected: (_) => setState(() => _selected = r),
+                    ))
+                .toList(),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel')),
+        FilledButton(
+            onPressed: _selected == null
+                ? null
+                : () => Navigator.pop(context, _selected),
+            child: const Text('Report')),
       ],
     );
   }

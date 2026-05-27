@@ -214,7 +214,7 @@ class _AdminScreenState extends State<AdminScreen>
   Widget _buildPlacesTab(ColorScheme cs) {
     if (_loadingPlaces) return const Center(child: CircularProgressIndicator());
     if (_placeError != null) return _ErrorView(msg: _placeError!, onRetry: _loadPlaces);
-    if (_placeReports.isEmpty) return const _EmptyView(label: 'No reported places.');
+    if (_placeReports.isEmpty) return const _EmptyView(label: 'No user-submitted places yet.');
     return RefreshIndicator(
       onRefresh: _loadPlaces,
       child: ListView.separated(
@@ -225,7 +225,9 @@ class _AdminScreenState extends State<AdminScreen>
           report: _placeReports[i],
           timeAgo: _timeAgo,
           onDelete: () => _deletePlace(_placeReports[i]),
-          onDismiss: () => _dismissPlaceReports(_placeReports[i]),
+          onDismiss: _placeReports[i].reportCount > 0
+              ? () => _dismissPlaceReports(_placeReports[i])
+              : null,
         ),
       ),
     );
@@ -395,13 +397,13 @@ class _PlaceReportCard extends StatelessWidget {
   final PlaceReport report;
   final String Function(DateTime) timeAgo;
   final VoidCallback onDelete;
-  final VoidCallback onDismiss;
+  final VoidCallback? onDismiss;
 
   const _PlaceReportCard({
     required this.report,
     required this.timeAgo,
     required this.onDelete,
-    required this.onDismiss,
+    this.onDismiss,
   });
 
   @override
@@ -416,15 +418,34 @@ class _PlaceReportCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
-              Icon(Icons.flag_rounded, color: cs.error, size: 18),
+              Icon(
+                report.reportCount > 0 ? Icons.flag_rounded : Icons.place_outlined,
+                color: report.reportCount > 0 ? cs.error : cs.onSurfaceVariant,
+                size: 18,
+              ),
               const SizedBox(width: 6),
               Text(
-                '${report.reportCount} report${report.reportCount > 1 ? 's' : ''}',
-                style: TextStyle(color: cs.error, fontWeight: FontWeight.bold),
+                report.reportCount > 0
+                    ? '${report.reportCount} report${report.reportCount > 1 ? 's' : ''}'
+                    : 'No reports',
+                style: TextStyle(
+                  color: report.reportCount > 0 ? cs.error : cs.onSurfaceVariant,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-              const SizedBox(width: 8),
-              Text('· first ${timeAgo(report.firstReportedAt)}',
-                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
+              if (report.firstReportedAt != null) ...[
+                const SizedBox(width: 8),
+                Text('· first ${timeAgo(report.firstReportedAt!)}',
+                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
+              ],
+              if (report.reasons != null) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(report.reasons!,
+                      style: TextStyle(color: cs.onSurfaceVariant, fontSize: 11),
+                      overflow: TextOverflow.ellipsis),
+                ),
+              ],
             ]),
             const Divider(height: 16),
             Row(children: [
@@ -449,14 +470,16 @@ class _PlaceReportCard extends StatelessWidget {
             ]),
             const SizedBox(height: 12),
             Row(children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: onDismiss,
-                  icon: const Icon(Icons.check_circle_outline_rounded),
-                  label: const Text('Dismiss'),
+              if (onDismiss != null) ...[
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onDismiss,
+                    icon: const Icon(Icons.check_circle_outline_rounded),
+                    label: const Text('Dismiss reports'),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
+                const SizedBox(width: 10),
+              ],
               Expanded(
                 child: FilledButton.icon(
                   style: FilledButton.styleFrom(backgroundColor: cs.error, foregroundColor: cs.onError),

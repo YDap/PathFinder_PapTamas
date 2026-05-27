@@ -146,7 +146,8 @@ class PlaceReport {
   final double latitude;
   final double longitude;
   final int reportCount;
-  final DateTime firstReportedAt;
+  final DateTime? firstReportedAt;
+  final String? reasons;
 
   const PlaceReport({
     required this.placeId,
@@ -155,7 +156,8 @@ class PlaceReport {
     required this.latitude,
     required this.longitude,
     required this.reportCount,
-    required this.firstReportedAt,
+    this.firstReportedAt,
+    this.reasons,
   });
 
   factory PlaceReport.fromJson(Map<String, dynamic> j) => PlaceReport(
@@ -164,8 +166,11 @@ class PlaceReport {
         category: j['category']?.toString() ?? '',
         latitude: (j['latitude'] as num).toDouble(),
         longitude: (j['longitude'] as num).toDouble(),
-        reportCount: int.parse(j['report_count'].toString()),
-        firstReportedAt: DateTime.parse(j['first_reported_at'].toString()),
+        reportCount: int.tryParse(j['report_count'].toString()) ?? 0,
+        firstReportedAt: j['first_reported_at'] != null
+            ? DateTime.tryParse(j['first_reported_at'].toString())
+            : null,
+        reasons: j['reasons']?.toString(),
       );
 }
 
@@ -743,11 +748,13 @@ class PlacesApi {
   }
 
   /// POST /places/:id/report  (requires auth)
-  Future<void> reportPlace(String placeId) async {
+  Future<void> reportPlace(String placeId, {required String reason}) async {
     final uri = Uri.parse('$baseUrl/places/$placeId/report');
     try {
       final headers = await _authHeaders();
-      await http.post(uri, headers: headers).timeout(const Duration(seconds: 10));
+      await http
+          .post(uri, headers: headers, body: json.encode({'reason': reason}))
+          .timeout(const Duration(seconds: 10));
     } on TimeoutException {
       throw Exception('Timeout reporting place');
     } on SocketException catch (e) {
