@@ -45,10 +45,10 @@ class PlacesLayer extends StatefulWidget {
   });
 
   @override
-  State<PlacesLayer> createState() => _PlacesLayerState();
+  State<PlacesLayer> createState() => PlacesLayerState();
 }
 
-class _PlacesLayerState extends State<PlacesLayer> {
+class PlacesLayerState extends State<PlacesLayer> {
   StreamSubscription<MapEvent>? _sub;
   Timer? _debounce;
 
@@ -83,6 +83,8 @@ class _PlacesLayerState extends State<PlacesLayer> {
     _debounce?.cancel();
     super.dispose();
   }
+
+  void selectPlace(Place p) => _openPlaceSheet(p);
 
   void _scheduleReload() {
     _debounce?.cancel();

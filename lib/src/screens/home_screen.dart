@@ -31,6 +31,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final MapController _mapController = MapController();
+  final GlobalKey<PlacesLayerState> _placesLayerKey = GlobalKey<PlacesLayerState>();
 
   // USB + adb reverse esetere:
   final PlacesApi _placesApi =
@@ -163,6 +164,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 userAgentPackageName: 'com.example.pathfinder_app',
               ),
               PlacesLayer(
+                key: _placesLayerKey,
                 mapController: _mapController,
                 api: _placesApi,
                 limit: 1000,
@@ -561,6 +563,9 @@ class _HomeScreenState extends State<HomeScreen> {
             LatLng(place.latitude, place.longitude),
             14,
           );
+          Future.delayed(const Duration(milliseconds: 350), () {
+            _placesLayerKey.currentState?.selectPlace(place);
+          });
         },
       ),
     );
