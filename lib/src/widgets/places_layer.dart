@@ -369,22 +369,65 @@ class PlacesLayerState extends State<PlacesLayer> {
                 ],
               ),
               const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  onPressed: () async {
-                    final text =
-                        '${p.latitude},${p.longitude}  ${(p.name.isEmpty ? 'Unknown' : p.name)}';
-                    await Clipboard.setData(ClipboardData(text: text));
-                    if (mounted) {
-                      ScaffoldMessenger.of(ctx).showSnackBar(
-                        const SnackBar(content: Text('Coordinates copied')),
-                      );
-                    }
-                  },
-                  icon: const Icon(Icons.copy_all_rounded),
-                  label: const Text('Copy coords'),
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  TextButton.icon(
+                    onPressed: () async {
+                      final text =
+                          '${p.latitude},${p.longitude}  ${(p.name.isEmpty ? 'Unknown' : p.name)}';
+                      await Clipboard.setData(ClipboardData(text: text));
+                      if (mounted) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          const SnackBar(content: Text('Coordinates copied')),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.copy_all_rounded),
+                    label: const Text('Copy coords'),
+                  ),
+                  if (!widget.isAdmin)
+                    TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: Theme.of(ctx).colorScheme.error,
+                      ),
+                      onPressed: () async {
+                        final confirmed = await showDialog<bool>(
+                          context: ctx,
+                          builder: (d) => AlertDialog(
+                            title: const Text('Report Place'),
+                            content: const Text(
+                                'Report this place as inappropriate or incorrect?'),
+                            actions: [
+                              TextButton(
+                                  onPressed: () => Navigator.pop(d, false),
+                                  child: const Text('Cancel')),
+                              FilledButton(
+                                  onPressed: () => Navigator.pop(d, true),
+                                  child: const Text('Report')),
+                            ],
+                          ),
+                        );
+                        if (confirmed != true) return;
+                        try {
+                          await widget.api.reportPlace(p.id);
+                          if (mounted) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              const SnackBar(content: Text('Place reported. Thank you.')),
+                            );
+                          }
+                        } catch (_) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              const SnackBar(content: Text('Failed to report place.')),
+                            );
+                          }
+                        }
+                      },
+                      icon: const Icon(Icons.flag_outlined),
+                      label: const Text('Report'),
+                    ),
+                ],
               ),
             ],
           ),

@@ -137,6 +137,39 @@ class PostReport {
 }
 
 // ─────────────────────────────────────────────────────────────
+// PlaceReport model (admin panel)
+// ─────────────────────────────────────────────────────────────
+class PlaceReport {
+  final String placeId;
+  final String name;
+  final String category;
+  final double latitude;
+  final double longitude;
+  final int reportCount;
+  final DateTime firstReportedAt;
+
+  const PlaceReport({
+    required this.placeId,
+    required this.name,
+    required this.category,
+    required this.latitude,
+    required this.longitude,
+    required this.reportCount,
+    required this.firstReportedAt,
+  });
+
+  factory PlaceReport.fromJson(Map<String, dynamic> j) => PlaceReport(
+        placeId: j['place_id'].toString(),
+        name: j['name']?.toString() ?? '',
+        category: j['category']?.toString() ?? '',
+        latitude: (j['latitude'] as num).toDouble(),
+        longitude: (j['longitude'] as num).toDouble(),
+        reportCount: int.parse(j['report_count'].toString()),
+        firstReportedAt: DateTime.parse(j['first_reported_at'].toString()),
+      );
+}
+
+// ─────────────────────────────────────────────────────────────
 // Comment model
 // ─────────────────────────────────────────────────────────────
 class Comment {
@@ -684,14 +717,12 @@ class PlacesApi {
 
   // ── Navigate Together ────────────────────────────────────
 
-  /// POST /places/suggest  (multipart, requires auth)
-  Future<void> submitPlace({
+  /// POST /places/suggest  (multipart, requires auth) — returns new place ID
+  Future<String> submitPlace({
     required String name,
     required String category,
     required double lat,
     required double lng,
-    String? description,
-    File? image,
   }) async {
     final token = await _getToken();
     final uri = Uri.parse('$baseUrl/places/suggest');
@@ -701,18 +732,57 @@ class PlacesApi {
       ..fields['category'] = category
       ..fields['lat'] = lat.toString()
       ..fields['lng'] = lng.toString();
-    if (description != null && description.isNotEmpty) {
-      request.fields['description'] = description;
-    }
-    if (image != null) {
-      request.files.add(await http.MultipartFile.fromPath('image', image.path));
-    }
     final streamed = await request.send().timeout(const Duration(seconds: 30));
     final res = await http.Response.fromStream(streamed);
     if (res.statusCode != 200) {
       final body = json.decode(res.body) as Map<String, dynamic>;
       throw Exception(body['error'] ?? 'Failed to submit place');
     }
+    final body = json.decode(res.body) as Map<String, dynamic>;
+    return body['id'].toString();
+  }
+
+  /// POST /places/:id/report  (requires auth)
+  Future<void> reportPlace(String placeId) async {
+    final uri = Uri.parse('$baseUrl/places/$placeId/report');
+    try {
+      final headers = await _authHeaders();
+      await http.post(uri, headers: headers).timeout(const Duration(seconds: 10));
+    } on TimeoutException {
+      throw Exception('Timeout reporting place');
+    } on SocketException catch (e) {
+      throw Exception('Network error: ${e.message}');
+    }
+  }
+
+  /// GET /admin/place-reports  (requires admin)
+  Future<List<PlaceReport>> fetchPlaceReports() async {
+    final uri = Uri.parse('$baseUrl/admin/place-reports');
+    try {
+      final headers = await _authHeaders();
+      final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 10));
+      if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');
+      final List decoded = json.decode(res.body) as List;
+      return decoded.map((e) => PlaceReport.fromJson(e as Map<String, dynamic>)).toList();
+    } on TimeoutException {
+      throw Exception('Timeout fetching place reports');
+    } on SocketException catch (e) {
+      throw Exception('Network error: ${e.message}');
+    }
+  }
+
+  /// DELETE /admin/places/:placeId  (requires admin)
+  Future<void> adminDeletePlace(String placeId) async {
+    final uri = Uri.parse('$baseUrl/admin/places/$placeId');
+    final headers = await _authHeaders();
+    await http.delete(uri, headers: headers).timeout(const Duration(seconds: 10));
+  }
+
+  /// DELETE /admin/place-reports/:placeId  (requires admin)
+  Future<void> adminDismissPlaceReports(String placeId) async {
+    final uri = Uri.parse('$baseUrl/admin/place-reports/$placeId');
+    final headers = await _authHeaders();
+    await http.delete(uri, headers: headers).timeout(const Duration(seconds: 10));
   }
 
   Future<String> inviteToNavigate(

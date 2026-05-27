@@ -1332,14 +1332,20 @@ class _HomeScreenState extends State<HomeScreen> {
               }
               setSheetState(() => submitting = true);
               try {
-                await _placesApi.submitPlace(
+                final newPlaceId = await _placesApi.submitPlace(
                   name: nameCtrl.text.trim(),
                   category: selectedCategory!,
                   lat: pickedLat!,
                   lng: pickedLng!,
-                  description: descCtrl.text.trim().isEmpty ? null : descCtrl.text.trim(),
-                  image: pickedImage,
                 );
+                final desc = descCtrl.text.trim();
+                if (desc.isNotEmpty || pickedImage != null) {
+                  await _placesApi.createPost(
+                    placeId: newPlaceId,
+                    content: desc.isNotEmpty ? desc : nameCtrl.text.trim(),
+                    image: pickedImage,
+                  );
+                }
                 if (ctx.mounted) {
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
