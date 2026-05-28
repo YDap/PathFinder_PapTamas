@@ -88,10 +88,15 @@ class PlacesLayerState extends State<PlacesLayer> {
 
   void _scheduleReload() {
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 300), _loadNow);
+    _debounce = Timer(const Duration(milliseconds: 500), _loadNow);
   }
 
   Future<void> _loadNow() async {
+    // Don't fetch individual markers when zoomed out too far — too little detail
+    if (widget.mapController.camera.zoom < 9) {
+      if (mounted) setState(() { _loading = false; _lastError = null; });
+      return;
+    }
     try {
       final bounds = widget.mapController.camera.visibleBounds;
       final sw = bounds.southWest;
@@ -200,8 +205,17 @@ class PlacesLayerState extends State<PlacesLayer> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
       builder: (ctx) {
+        Place displayPlace = p;
+        bool fetched = false;
         final cs = Theme.of(ctx).colorScheme;
-        return Padding(
+        return StatefulBuilder(builder: (ctx, setSheetState) {
+          if (!fetched) {
+            fetched = true;
+            widget.api.fetchPlaceById(p.id).then((full) {
+              if (ctx.mounted) setSheetState(() => displayPlace = full);
+            }).catchError((_) {});
+          }
+          return Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -233,8 +247,8 @@ class PlacesLayerState extends State<PlacesLayer> {
                     final parts = <String>[];
                     if (p.category.isNotEmpty) parts.add(p.category);
                     if (p.elevationM != null) parts.add('${p.elevationM} m');
-                    if (p.averageRating != null) {
-                      parts.add('⭐ ${p.averageRating!.toStringAsFixed(1)}/5');
+                    if (displayPlace.averageRating != null) {
+                      parts.add('⭐ ${displayPlace.averageRating!.toStringAsFixed(1)}/5');
                     }
                     parts.add(
                         '${p.latitude.toStringAsFixed(5)}, ${p.longitude.toStringAsFixed(5)}');
@@ -415,11 +429,56 @@ class PlacesLayerState extends State<PlacesLayer> {
                       icon: const Icon(Icons.flag_outlined),
                       label: const Text('Report'),
                     ),
+                  if (widget.isAdmin)
+                    TextButton.icon(
+                      style: TextButton.styleFrom(foregroundColor: cs.error),
+                      onPressed: () async {
+                        final confirmed = await showDialog<bool>(
+                          context: ctx,
+                          builder: (d) => AlertDialog(
+                            title: const Text('Delete Place'),
+                            content: Text(
+                                'Permanently delete "${p.name.isEmpty ? 'this place' : p.name}" and all its posts?'),
+                            actions: [
+                              TextButton(
+                                  onPressed: () => Navigator.pop(d, false),
+                                  child: const Text('Cancel')),
+                              FilledButton(
+                                  style: FilledButton.styleFrom(
+                                      backgroundColor: cs.error,
+                                      foregroundColor: cs.onError),
+                                  onPressed: () => Navigator.pop(d, true),
+                                  child: const Text('Delete')),
+                            ],
+                          ),
+                        ) == true;
+                        if (!confirmed) return;
+                        try {
+                          await widget.api.adminDeletePlace(p.id);
+                          if (mounted && ctx.mounted) {
+                            setState(() => _cache.remove(p.id));
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Place deleted.')),
+                            );
+                          }
+                        } catch (e) {
+                          if (ctx.mounted) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              SnackBar(content: Text('Failed: $e')),
+                            );
+                          }
+                        }
+                      },
+                      icon: const Icon(Icons.delete_forever_rounded),
+                      label: const Text('Delete Place'),
+                    ),
                 ],
               ),
             ],
           ),
         );
+        });
       },
     );
     if (mounted) setState(() => _selected = null);
@@ -544,7 +603,7 @@ class PlacesLayerState extends State<PlacesLayer> {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 120),
               decoration: BoxDecoration(
-                color: color.withOpacity(isSelected ? 1.0 : 0.9),
+                color: color.withValues(alpha: isSelected ? 1.0 : 0.9),
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.white, width: 2),
                 boxShadow: const [
