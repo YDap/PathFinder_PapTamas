@@ -67,6 +67,8 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _navPartnerName;
   PartnerLocation? _partnerLocation;
   LatLng? _navDestination;       // shared destination (to draw partner's line)
+  List<LatLng> _partnerRoutePolyline = [];
+  LatLng? _lastPartnerLocationForRoute;
   Timer? _navPollTimer;
   Timer? _invitePollTimer;
 
@@ -82,6 +84,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _minElevationController = TextEditingController();
     _maxElevationController = TextEditingController();
     _distanceController = TextEditingController();
+    _placesApi.warmUp();
     _ensureLocationAndCenter(silent: true);
     _loadProfileImage();
     _startInvitePolling();
@@ -195,15 +198,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ],
                 ),
-              // Partner route line: from partner's GPS to shared destination (orange, dashed)
-              if (_partnerLocation != null && _navDestination != null)
+              // Partner route line (orange dashed) — fetched via routing API
+              if (_partnerRoutePolyline.isNotEmpty)
                 PolylineLayer(
                   polylines: [
                     Polyline(
-                      points: [
-                        LatLng(_partnerLocation!.lat, _partnerLocation!.lng),
-                        _navDestination!,
-                      ],
+                      points: _partnerRoutePolyline,
                       color: Colors.orange,
                       strokeWidth: 3,
                       borderStrokeWidth: 1.5,
@@ -746,6 +746,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _stopNavigation() {
+    // End any active shared session so the partner's polyline clears immediately.
+    if (_navSessionId != null) {
+      _endNavSession();
+    }
     setState(() {
       _isNavigating = false;
       _routePolyline = [];
@@ -918,12 +922,24 @@ class _HomeScreenState extends State<HomeScreen> {
           return;
         }
         if (result.status == 'active') {
+          final dest = _navDestination ??
+              (result.destination != null
+                  ? LatLng(result.destination!.lat, result.destination!.lng)
+                  : null);
           setState(() {
             _partnerLocation = result.partnerLocation;
-            if (_navDestination == null && result.destination != null) {
-              _navDestination = LatLng(result.destination!.lat, result.destination!.lng);
-            }
+            if (_navDestination == null && dest != null) _navDestination = dest;
           });
+          final pl = result.partnerLocation;
+          if (pl != null && dest != null) {
+            final newLoc = LatLng(pl.lat, pl.lng);
+            if (_lastPartnerLocationForRoute == null ||
+                const Distance().as(LengthUnit.Meter,
+                    _lastPartnerLocationForRoute!, newLoc) > 100) {
+              _lastPartnerLocationForRoute = newLoc;
+              _fetchPartnerRoute(newLoc, dest);
+            }
+          }
         }
       } catch (_) {}
     });
@@ -996,6 +1012,13 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {}
   }
 
+  Future<void> _fetchPartnerRoute(LatLng from, LatLng to) async {
+    try {
+      final routeData = await RoutingService().getRoute(from, to);
+      if (mounted) setState(() => _partnerRoutePolyline = routeData.polyline);
+    } catch (_) {}
+  }
+
   void _endNavSession({bool notify = false}) {
     final sessionId = _navSessionId;
     if (sessionId != null) {
@@ -1008,6 +1031,8 @@ class _HomeScreenState extends State<HomeScreen> {
       _navPartnerName = null;
       _partnerLocation = null;
       _navDestination = null;
+      _partnerRoutePolyline = [];
+      _lastPartnerLocationForRoute = null;
     });
     _saveNavigationState();
     _startInvitePolling();
@@ -1675,6 +1700,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     'Found in your Profile. Shares your current GPS coordinates so you can call for help.'),
                 item(Icons.people_rounded, 'Friends',
                     'Found in your Profile. Search for users, send friend requests and manage your friends list.'),
+                item(Icons.wb_sunny_rounded, 'Weather Forecast',
+                    'Tap any place marker, then tap "24h Weather Forecast" to see an hourly temperature and weather conditions timeline for that exact location for the next 24 hours, powered by Open-Meteo.'),
                 const SizedBox(height: 8),
                 FilledButton(
                   onPressed: () => Navigator.pop(ctx),
@@ -1693,6 +1720,7 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
+      enableDrag: false,
       backgroundColor: Theme.of(context).colorScheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -1705,7 +1733,7 @@ class _HomeScreenState extends State<HomeScreen> {
             return DraggableScrollableSheet(
               expand: false,
               initialChildSize: 0.75,
-              minChildSize: 0.5,
+              minChildSize: 0.75,
               maxChildSize: 0.95,
               builder: (ctx, scrollCtl) {
                 return Padding(
@@ -2103,9 +2131,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               _showAllLocations;
                           if (hasFilters) {
                             final center = _currentLatLng ?? _mapController.camera.center;
-                            final currentZoom = _mapController.camera.zoom;
-                            final targetZoom = currentZoom > 11.5 ? 11.5 : currentZoom;
-                            _mapController.move(center, targetZoom);
+                            _mapController.move(center, 10.0);
                           }
                         },
                         child: const Text('Apply Filters'),
