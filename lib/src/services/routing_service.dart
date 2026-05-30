@@ -36,10 +36,10 @@ class RoutingService {
         final firstRoute = routes[0];
         final geometry = firstRoute['geometry'] as Map;
         final coordinates = geometry['coordinates'] as List;
-        final distance = firstRoute['distance'] as double;
+        final distance = (firstRoute['distance'] as num).toDouble();
 
         final polyline = coordinates.map((coord) {
-          return LatLng(coord[1] as double, coord[0] as double);
+          return LatLng((coord[1] as num).toDouble(), (coord[0] as num).toDouble());
         }).toList();
 
         return RouteData(polyline: polyline, distance: distance);
