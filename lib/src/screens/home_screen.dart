@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -21,6 +22,7 @@ import 'login_screen.dart';
 import 'admin_screen.dart';
 import 'friends_screen.dart';
 import 'stats_screen.dart';
+import '../services/level_service.dart';
 
 class HomeScreen extends StatefulWidget {
   static const routeName = '/home';
@@ -65,6 +67,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Waypoints along the active route (natural places within 600 m of the route)
   List<Place> _routeWaypoints = [];
+
+  // Cached stats + recently unlocked badges for the profile sheet
+  UserStats? _cachedStats;
+  List<UnlockedBadge> _recentlyUnlocked = [];
   // Pre-computed bar fractions: placeId → 0..1 position on the progress bar.
   // Recomputed only when waypoints change, not on every position update.
   Map<String, double> _waypointFractions = {};
@@ -112,8 +118,48 @@ class _HomeScreenState extends State<HomeScreen> {
     _placesApi.warmUp();
     _ensureLocationAndCenter(silent: true);
     _loadProfileImage();
+    _loadStatsBackground();
     _startInvitePolling();
     WidgetsBinding.instance.addPostFrameCallback((_) => _restoreNavigationState());
+  }
+
+  Future<void> _loadStatsBackground() async {
+    try {
+      final stats = await _placesApi.fetchMyStats();
+      if (!mounted) return;
+      final prefs = await SharedPreferences.getInstance();
+
+      // Detect newly unlocked / upgraded badges
+      final current = currentBadgeState(stats);
+      final prevJson = prefs.getString('badge_state') ?? '{}';
+      final previous = (json.decode(prevJson) as Map<String, dynamic>)
+          .map((k, v) => MapEntry(k, v.toString()));
+
+      final newKeys = <String>[];
+      for (final e in current.entries) {
+        final prev = previous[e.key] ?? 'locked';
+        if (e.value != 'locked' && e.value != prev) {
+          newKeys.add('${e.key}:${e.value}');
+        }
+      }
+
+      // Merge with stored list (newest first, keep 3)
+      final storedJson = prefs.getString('recently_unlocked_keys') ?? '[]';
+      final stored = (json.decode(storedJson) as List).cast<String>();
+      final merged = [...newKeys, ...stored.where((k) => !newKeys.any((n) => n.split(':')[0] == k.split(':')[0]))]
+          .take(3)
+          .toList();
+
+      await prefs.setString('badge_state', json.encode(current));
+      await prefs.setString('recently_unlocked_keys', json.encode(merged));
+
+      final recent = merged
+          .map((k) { final p = k.split(':'); return p.length == 2 ? unlockedBadgeFor(p[0], p[1]) : null; })
+          .whereType<UnlockedBadge>()
+          .toList();
+
+      if (mounted) setState(() { _cachedStats = stats; _recentlyUnlocked = recent; });
+    } catch (_) {}
   }
 
   Future<void> _loadProfileImage() async {
@@ -1242,6 +1288,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 14),
+                  // Compact level / XP bar
+                  if (_cachedStats != null)
+                    _ProfileLevelBar(stats: _cachedStats!),
                   const SizedBox(height: 16),
                   if (_isAdmin) ...[
                     SizedBox(
@@ -1361,6 +1411,68 @@ class _HomeScreenState extends State<HomeScreen> {
                       }
                     },
                   ),
+                  // ── Recently unlocked ──────────────────────
+                  if (_recentlyUnlocked.isNotEmpty) ...[
+                    const Divider(height: 24),
+                    Text(
+                      'Recently Unlocked',
+                      style: Theme.of(ctx).textTheme.labelMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: cs.onSurfaceVariant,
+                          ),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _recentlyUnlocked.map((b) {
+                        final tc = tierColors[b.tier]!;
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: tc.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: tc.withValues(alpha: 0.35)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 26,
+                                height: 26,
+                                decoration: BoxDecoration(
+                                  color: b.color.withValues(alpha: 0.15),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: tc, width: 1.5),
+                                ),
+                                child: Icon(b.icon, size: 13, color: b.color),
+                              ),
+                              const SizedBox(width: 7),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(b.name,
+                                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+                                  Text(
+                                    tierLabels[b.tier]!.toUpperCase(),
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: b.tier == BadgeTier.gold
+                                          ? const Color(0xFFB8860B)
+                                          : tc,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
                 ],
               ),
             );
@@ -2372,6 +2484,75 @@ class _HomeScreenState extends State<HomeScreen> {
 
 // ----------------------------------------------------------
 // Partner location marker (green pin with initial)
+// ----------------------------------------------------------
+// Profile compact level / XP bar
+// ----------------------------------------------------------
+
+class _ProfileLevelBar extends StatelessWidget {
+  final UserStats stats;
+  const _ProfileLevelBar({required this.stats});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final xp       = computeXp(stats);
+    final level    = levelFromXp(xp);
+    final xpStart  = xpForLevel(level);
+    final xpEnd    = xpForLevel(level + 1);
+    final frac     = ((xp - xpStart) / (xpEnd - xpStart)).clamp(0.0, 1.0);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: cs.primaryContainer.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(color: cs.primary, shape: BoxShape.circle),
+            child: Center(
+              child: Text(
+                '$level',
+                style: TextStyle(color: cs.onPrimary, fontWeight: FontWeight.w900, fontSize: 17),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(levelTitle(level),
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                    Text('${xpEnd - xp} XP to Lv.${level + 1}',
+                        style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: frac,
+                    minHeight: 6,
+                    backgroundColor: cs.primary.withValues(alpha: 0.15),
+                    valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ----------------------------------------------------------
 
 class _PartnerMarker extends StatelessWidget {
