@@ -918,17 +918,28 @@ class _HomeScreenState extends State<HomeScreen> {
     _navPollTimer?.cancel();
     _navPollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
       if (_navSessionId == null || !mounted) return;
+      // Snapshot the session ID now. If _endNavSession() runs while we are
+      // awaiting network calls below, _navSessionId will be set to null (or a
+      // new value). We check the snapshot before writing any state so that a
+      // stale response from the OLD session can never overwrite a clean state.
+      final sessionId = _navSessionId!;
       try {
         if (_currentLatLng != null) {
           await _placesApi.updateNavLocation(
-            _navSessionId!,
+            sessionId,
             _currentLatLng!.latitude,
             _currentLatLng!.longitude,
             remainingKm: _isNavigating ? _distanceToDestination : null,
           );
         }
-        final result = await _placesApi.getPartnerNavLocation(_navSessionId!);
-        if (!mounted) return;
+        // Bail if the session changed while we were awaiting updateNavLocation.
+        if (!mounted || _navSessionId != sessionId) return;
+
+        final result = await _placesApi.getPartnerNavLocation(sessionId);
+
+        // Bail if the session changed while we were awaiting getPartnerNavLocation.
+        if (!mounted || _navSessionId != sessionId) return;
+
         if (result.status == 'ended') {
           _endNavSession(notify: true);
           return;

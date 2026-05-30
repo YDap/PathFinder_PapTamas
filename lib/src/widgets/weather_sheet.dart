@@ -103,7 +103,7 @@ class _WeatherSheetState extends State<WeatherSheet> {
                 ),
               ),
               Text(
-                'Next 24 hours',
+                'Next 48 hours',
                 style: Theme.of(context)
                     .textTheme
                     .bodySmall

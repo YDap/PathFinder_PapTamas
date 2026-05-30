@@ -21,7 +21,7 @@ class WeatherService {
         'latitude': lat.toStringAsFixed(4),
         'longitude': lng.toStringAsFixed(4),
         'hourly': 'temperature_2m,weathercode',
-        'forecast_days': '1',
+        'forecast_days': '2',
         'timezone': 'auto',
       },
     );
