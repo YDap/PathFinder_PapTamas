@@ -2011,7 +2011,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 item(Icons.wb_sunny_rounded, 'Weather Forecast',
                     'Tap any place marker, then tap "48h Weather Forecast" to see an hourly temperature and conditions timeline for that exact location for the next 48 hours, powered by Open-Meteo.'),
                 item(Icons.emoji_events_rounded, 'Stats & Badges',
-                    'Found in your Profile under "Stats & Badges". Tracks your total km traveled, places visited and posts published. Earn Bronze, Silver, Gold and Platinum badges for each place category (5 / 15 / 25 / 40 visits) and for overall achievements like distance covered and posts written. Badges are awarded automatically when you reach a destination during navigation.'),
+                    'Found in your Profile under "Stats & Badges". Tracks your total km traveled, places visited and posts published. Earn Bronze, Silver, Gold and Platinum badges for each place category (5 / 15 / 25 / 40 visits) and for overall achievements like distance covered and posts written. Every badge and activity earns you XP, which grows an XP bar and levels you up — from Wanderer (Level 1) all the way to Grand Pathfinder (Level 20+). Your current level and progress bar are always visible at the top of your Profile. Recently unlocked badges appear below the logout button.'),
                 const SizedBox(height: 8),
                 FilledButton(
                   onPressed: () => Navigator.pop(ctx),
