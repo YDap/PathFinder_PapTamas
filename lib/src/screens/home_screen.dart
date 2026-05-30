@@ -88,6 +88,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // Navigate Together state
   String? _navSessionId;
   String? _navPartnerName;
+  String? _navPartnerImageUrl;
   PartnerLocation? _partnerLocation;
   LatLng? _navDestination;       // shared destination (to draw partner's line)
   List<LatLng> _partnerRoutePolyline = [];
@@ -273,7 +274,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           );
                         },
-                        child: _PartnerMarker(name: _navPartnerName ?? 'Friend'),
+                        child: _PartnerMarker(
+                          name: _navPartnerName ?? 'Friend',
+                          imageUrl: _navPartnerImageUrl,
+                        ),
                       ),
                     ),
                   ],
@@ -882,6 +886,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 setState(() {
                   _navSessionId = invite.sessionId;
                   _navPartnerName = invite.creatorName;
+                  _navPartnerImageUrl = invite.creatorImage != null
+                      ? '${_placesApi.baseUrl}${invite.creatorImage}'
+                      : null;
                   if (invite.hasDestination) {
                     _navDestination = LatLng(invite.destinationLat!, invite.destinationLng!);
                   }
@@ -1012,6 +1019,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     setState(() {
                       _navSessionId = sessionId;
                       _navPartnerName = f.label;
+                      _navPartnerImageUrl = f.profileImageUrl != null
+                          ? '${_placesApi.baseUrl}${f.profileImageUrl}'
+                          : null;
                     });
                     _startNavSessionPolling();
                     _saveNavigationState();
@@ -1052,6 +1062,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _navSessionId = null;
       _navPartnerName = null;
+      _navPartnerImageUrl = null;
       _partnerLocation = null;
       _navDestination = null;
       _partnerRoutePolyline = [];
@@ -1860,6 +1871,7 @@ class _HomeScreenState extends State<HomeScreen> {
       isScrollControlled: true,
       useSafeArea: true,
       enableDrag: false,
+      isDismissible: false,
       backgroundColor: Theme.of(context).colorScheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -2316,7 +2328,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
 class _PartnerMarker extends StatelessWidget {
   final String name;
-  const _PartnerMarker({required this.name});
+  final String? imageUrl;
+  const _PartnerMarker({required this.name, this.imageUrl});
 
   @override
   Widget build(BuildContext context) {
@@ -2334,12 +2347,26 @@ class _PartnerMarker extends StatelessWidget {
               BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
             ],
           ),
-          child: Center(
-            child: Text(
-              name.isNotEmpty ? name[0].toUpperCase() : '?',
-              style: const TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-            ),
+          child: ClipOval(
+            child: imageUrl != null
+                ? Image.network(
+                    imageUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Center(
+                      child: Text(
+                        name.isNotEmpty ? name[0].toUpperCase() : '?',
+                        style: const TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                    ),
+                  )
+                : Center(
+                    child: Text(
+                      name.isNotEmpty ? name[0].toUpperCase() : '?',
+                      style: const TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                  ),
           ),
         ),
         Container(width: 3, height: 8, color: Colors.green.shade600),
