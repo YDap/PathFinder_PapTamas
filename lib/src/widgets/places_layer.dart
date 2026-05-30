@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/places_api.dart';
 import '../screens/posts_screen.dart';
 import 'create_post_sheet.dart';
+import 'weather_sheet.dart';
 
 // Categories considered "interesting waypoints" during navigation
 const _waypointCategories = {
@@ -381,6 +382,28 @@ class PlacesLayerState extends State<PlacesLayer> {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    showModalBottomSheet(
+                      context: context,
+                      useSafeArea: true,
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                      ),
+                      builder: (_) => WeatherSheet(
+                        placeName: p.name,
+                        latitude: p.latitude,
+                        longitude: p.longitude,
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.wb_sunny_rounded),
+                  label: const Text('24h Weather Forecast'),
+                ),
               ),
               const SizedBox(height: 8),
               Row(
