@@ -1897,7 +1897,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 item(Icons.people_rounded, 'Friends',
                     'Found in your Profile. Search for users, send friend requests and manage your friends list.'),
                 item(Icons.wb_sunny_rounded, 'Weather Forecast',
-                    'Tap any place marker, then tap "24h Weather Forecast" to see an hourly temperature and weather conditions timeline for that exact location for the next 24 hours, powered by Open-Meteo.'),
+                    'Tap any place marker, then tap "48h Weather Forecast" to see an hourly temperature and conditions timeline for that exact location for the next 48 hours, powered by Open-Meteo.'),
+                item(Icons.emoji_events_rounded, 'Stats & Badges',
+                    'Found in your Profile under "Stats & Badges". Tracks your total km traveled, places visited and posts published. Earn Bronze, Silver, Gold and Platinum badges for each place category (5 / 15 / 25 / 40 visits) and for overall achievements like distance covered and posts written. Badges are awarded automatically when you reach a destination during navigation.'),
                 const SizedBox(height: 8),
                 FilledButton(
                   onPressed: () => Navigator.pop(ctx),
