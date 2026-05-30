@@ -27,10 +27,218 @@ class _StatsScreenState extends State<StatsScreen> {
       final s = await widget.api.fetchMyStats();
       if (mounted) setState(() { _stats = s; _loading = false; });
     } catch (e) {
-      if (mounted) setState(() { _error = e.toString().replaceFirst('Exception: ', ''); _loading = false; });
+      if (mounted) setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+        _loading = false;
+      });
     }
   }
 
+  // ── Level progression sheet ────────────────────────────────
+  void _showLevelProgression(BuildContext ctx, int currentLevel) {
+    showModalBottomSheet(
+      context: ctx,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.6,
+        minChildSize: 0.4,
+        maxChildSize: 0.92,
+        builder: (_, scrollCtl) {
+          final cs = Theme.of(ctx).colorScheme;
+          return Column(children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+              child: Row(children: [
+                Container(
+                  width: 40, height: 4,
+                  margin: const EdgeInsets.only(right: 12),
+                  decoration: BoxDecoration(color: cs.outlineVariant, borderRadius: BorderRadius.circular(999)),
+                ),
+                Expanded(child: Text('All Level Titles',
+                    style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700))),
+              ]),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: ListView.builder(
+                controller: scrollCtl,
+                itemCount: 20,
+                itemBuilder: (_, i) {
+                  final lv = i + 1;
+                  final isCurrent = lv == currentLevel;
+                  final xpNeeded = xpForLevel(lv);
+                  final xpNext = xpForLevel(lv + 1);
+                  return ListTile(
+                    leading: Container(
+                      width: 36, height: 36,
+                      decoration: BoxDecoration(
+                        color: isCurrent ? cs.primary : cs.surfaceContainerHigh,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(child: Text('$lv',
+                          style: TextStyle(
+                            color: isCurrent ? cs.onPrimary : cs.onSurfaceVariant,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 14,
+                          ))),
+                    ),
+                    title: Text(levelTitle(lv),
+                        style: TextStyle(
+                          fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w500,
+                          color: isCurrent ? cs.primary : null,
+                        )),
+                    subtitle: Text('$xpNeeded XP — ${xpNext - xpNeeded} XP to next',
+                        style: const TextStyle(fontSize: 12)),
+                    trailing: isCurrent
+                        ? Chip(
+                            label: const Text('You', style: TextStyle(fontSize: 11)),
+                            backgroundColor: cs.primaryContainer,
+                            padding: EdgeInsets.zero,
+                          )
+                        : null,
+                  );
+                },
+              ),
+            ),
+          ]);
+        },
+      ),
+    );
+  }
+
+  // ── Badge info dialog ──────────────────────────────────────
+  void _showBadgeInfo(BuildContext ctx, BadgeDef def, List<int> thresholds, String description) {
+    showDialog(
+      context: ctx,
+      builder: (d) {
+        final cs = Theme.of(d).colorScheme;
+        final tiers = [BadgeTier.bronze, BadgeTier.silver, BadgeTier.gold, BadgeTier.platinum];
+        return AlertDialog(
+          title: Row(children: [
+            Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(
+                color: def.color.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(def.icon, color: def.color, size: 20),
+            ),
+            const SizedBox(width: 10),
+            Text(def.name),
+          ]),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(description,
+                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+              const SizedBox(height: 16),
+              ...List.generate(4, (i) {
+                final t = tiers[i];
+                final tc = tierColors[t]!;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(children: [
+                    Container(
+                      width: 28, height: 28,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: tc.withValues(alpha: 0.15),
+                        border: Border.all(color: tc, width: 1.5),
+                      ),
+                      child: Center(child: Text(tierLabels[t]![0],
+                          style: TextStyle(
+                            color: t == BadgeTier.gold ? const Color(0xFFB8860B) : tc,
+                            fontWeight: FontWeight.w900, fontSize: 12))),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(tierLabels[t]!,
+                        style: TextStyle(fontWeight: FontWeight.w600, color: tc)),
+                    const Spacer(),
+                    Text('${thresholds[i]} visits',
+                        style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+                  ]),
+                );
+              }),
+            ],
+          ),
+          actions: [
+            FilledButton(
+                onPressed: () => Navigator.pop(d),
+                child: const Text('Got it')),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showAchievInfo(BuildContext ctx, BadgeDef def, List thresholds, String unit, String description) {
+    showDialog(
+      context: ctx,
+      builder: (d) {
+        final cs = Theme.of(d).colorScheme;
+        final tiers = [BadgeTier.bronze, BadgeTier.silver, BadgeTier.gold, BadgeTier.platinum];
+        return AlertDialog(
+          title: Row(children: [
+            Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(
+                color: def.color.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(def.icon, color: def.color, size: 20),
+            ),
+            const SizedBox(width: 10),
+            Text(def.name),
+          ]),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(description,
+                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+              const SizedBox(height: 16),
+              ...List.generate(4, (i) {
+                final t = tiers[i];
+                final tc = tierColors[t]!;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(children: [
+                    Container(
+                      width: 28, height: 28,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: tc.withValues(alpha: 0.15),
+                        border: Border.all(color: tc, width: 1.5),
+                      ),
+                      child: Center(child: Text(tierLabels[t]![0],
+                          style: TextStyle(
+                            color: t == BadgeTier.gold ? const Color(0xFFB8860B) : tc,
+                            fontWeight: FontWeight.w900, fontSize: 12))),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(tierLabels[t]!, style: TextStyle(fontWeight: FontWeight.w600, color: tc)),
+                    const Spacer(),
+                    Text('${thresholds[i]} $unit',
+                        style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+                  ]),
+                );
+              }),
+            ],
+          ),
+          actions: [
+            FilledButton(onPressed: () => Navigator.pop(d), child: const Text('Got it')),
+          ],
+        );
+      },
+    );
+  }
+
+  // ── Main content ───────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -47,16 +255,13 @@ class _StatsScreenState extends State<StatsScreen> {
               ? Center(
                   child: Padding(
                     padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.cloud_off_rounded, size: 48, color: cs.error),
-                        const SizedBox(height: 12),
-                        Text(_error!, textAlign: TextAlign.center, style: TextStyle(color: cs.error)),
-                        const SizedBox(height: 16),
-                        FilledButton(onPressed: _load, child: const Text('Retry')),
-                      ],
-                    ),
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.cloud_off_rounded, size: 48, color: cs.error),
+                      const SizedBox(height: 12),
+                      Text(_error!, textAlign: TextAlign.center, style: TextStyle(color: cs.error)),
+                      const SizedBox(height: 16),
+                      FilledButton(onPressed: _load, child: const Text('Retry')),
+                    ]),
                   ),
                 )
               : _buildContent(context, _stats!, cs),
@@ -74,153 +279,158 @@ class _StatsScreenState extends State<StatsScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       children: [
-        // ── Level card ────────────────────────────────────────
-        Card(
-          color: cs.primaryContainer,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+
+        // ── Level card (tappable → shows all levels) ──────────
+        Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => _showLevelProgression(ctx, level),
+            child: Card(
+              color: cs.primaryContainer,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: cs.primary,
-                        shape: BoxShape.circle,
+                    Row(children: [
+                      Container(
+                        width: 48, height: 48,
+                        decoration: BoxDecoration(color: cs.primary, shape: BoxShape.circle),
+                        child: Center(child: Text('$level',
+                            style: TextStyle(color: cs.onPrimary, fontWeight: FontWeight.w900, fontSize: 20))),
                       ),
-                      child: Center(
-                        child: Text(
-                          '$level',
-                          style: TextStyle(
-                            color: cs.onPrimary,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 20,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
+                      const SizedBox(width: 14),
+                      Expanded(child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(levelTitle(level),
-                              style: TextStyle(
-                                fontWeight: FontWeight.w800,
-                                fontSize: 18,
-                                color: cs.onPrimaryContainer,
-                              )),
-                          Text('$xp XP total',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: cs.onPrimaryContainer.withValues(alpha: 0.75),
-                              )),
+                          Text(levelTitle(level), style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: cs.onPrimaryContainer)),
+                          Text('$xp XP total', style: TextStyle(fontSize: 12, color: cs.onPrimaryContainer.withValues(alpha: 0.75))),
                         ],
+                      )),
+                      Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                        Text('Level ${level + 1}', style: TextStyle(fontSize: 11, color: cs.onPrimaryContainer.withValues(alpha: 0.7))),
+                        Text('${xpEnd - xp} XP to go', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.onPrimaryContainer)),
+                      ]),
+                    ]),
+                    const SizedBox(height: 12),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: LinearProgressIndicator(
+                        value: levelProgress, minHeight: 10,
+                        backgroundColor: cs.primary.withValues(alpha: 0.2),
+                        valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
                       ),
                     ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text('Level ${level + 1}',
-                            style: TextStyle(fontSize: 11, color: cs.onPrimaryContainer.withValues(alpha: 0.7))),
-                        Text('${xpEnd - xp} XP to go',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.onPrimaryContainer)),
-                      ],
-                    ),
+                    const SizedBox(height: 6),
+                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                      Text('$xpStart XP', style: TextStyle(fontSize: 10, color: cs.onPrimaryContainer.withValues(alpha: 0.6))),
+                      Text('${xp - xpStart} / ${xpEnd - xpStart} XP',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.onPrimaryContainer)),
+                      Text('$xpEnd XP', style: TextStyle(fontSize: 10, color: cs.onPrimaryContainer.withValues(alpha: 0.6))),
+                    ]),
+                    const SizedBox(height: 6),
+                    Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                      Text('Tap to view all level titles →',
+                          style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic,
+                              color: cs.onPrimaryContainer.withValues(alpha: 0.65))),
+                    ]),
                   ],
                 ),
-                const SizedBox(height: 12),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: LinearProgressIndicator(
-                    value: levelProgress,
-                    minHeight: 10,
-                    backgroundColor: cs.primary.withValues(alpha: 0.2),
-                    valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('$xpStart XP', style: TextStyle(fontSize: 10, color: cs.onPrimaryContainer.withValues(alpha: 0.6))),
-                    Text('${xp - xpStart} / ${xpEnd - xpStart} XP',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.onPrimaryContainer)),
-                    Text('$xpEnd XP', style: TextStyle(fontSize: 10, color: cs.onPrimaryContainer.withValues(alpha: 0.6))),
-                  ],
-                ),
-              ],
+              ),
             ),
           ),
         ),
         const SizedBox(height: 16),
 
         // ── Summary row ────────────────────────────────────────
-        Row(
-          children: [
-            _StatCard(icon: Icons.route_rounded,  color: const Color(0xFFFF7043),
-                value: s.totalKm >= 1000 ? '${(s.totalKm / 1000).toStringAsFixed(1)}k' : s.totalKm.toStringAsFixed(1),
-                label: 'km traveled'),
-            const SizedBox(width: 10),
-            _StatCard(icon: Icons.place_rounded,  color: const Color(0xFF7E57C2),
-                value: '${s.totalVisits}', label: 'places visited'),
-            const SizedBox(width: 10),
-            _StatCard(icon: Icons.article_rounded, color: const Color(0xFF66BB6A),
-                value: '${s.postsCount}', label: 'posts published'),
-          ],
-        ),
+        Row(children: [
+          _StatCard(icon: Icons.route_rounded,  color: const Color(0xFFFF7043),
+              value: s.totalKm >= 1000 ? '${(s.totalKm / 1000).toStringAsFixed(1)}k' : s.totalKm.toStringAsFixed(1),
+              label: 'km traveled'),
+          const SizedBox(width: 10),
+          _StatCard(icon: Icons.place_rounded,  color: const Color(0xFF7E57C2),
+              value: '${s.totalVisits}', label: 'places visited'),
+          const SizedBox(width: 10),
+          _StatCard(icon: Icons.article_rounded, color: const Color(0xFF66BB6A),
+              value: '${s.postsCount}', label: 'posts published'),
+        ]),
         const SizedBox(height: 24),
 
         // ── Place badges ────────────────────────────────────────
-        _sectionHeader(ctx, Icons.landscape, 'Place Badges', 'Navigate to a place and reach it to earn these'),
+        _sectionHeader(ctx, Icons.landscape, 'Place Badges',
+            'Navigate to and reach a place to count it. Tap ⓘ on any badge for requirements.'),
         const SizedBox(height: 12),
         GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
+          crossAxisCount: 2, shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
-          childAspectRatio: 0.8,
+          crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: 0.78,
           children: placeBadgeDefs.map((def) {
             final count = s.visitsByCategory[def.key] ?? 0;
             final t = badgeTier(count, placeThresholds);
             final p = badgeProgress(count, placeThresholds);
             return _BadgeCard(
-              name: def.name, icon: def.icon, iconColor: def.color, tier: t,
-              progressFrac: p.frac, progressLabel: p.label,
+              name: def.name, icon: def.icon, iconColor: def.color,
+              tier: t, progressFrac: p.frac, progressLabel: p.label,
               thresholdLabel: nextTierLabel(t, placeThresholds),
+              onInfo: () => _showBadgeInfo(ctx, def, placeThresholds,
+                  'Navigate to ${def.name == 'Peak Climber' ? 'peaks' : def.name == 'Lake Explorer' ? 'lakes' : def.name == 'Cave Diver' ? 'caves' : def.name == 'Ruin Hunter' ? 'ruins' : def.name == 'Spring Seeker' ? 'springs' : 'viewpoints'} and reach the destination to count each visit.'),
             );
           }).toList(),
         ),
         const SizedBox(height: 24),
 
         // ── Achievement badges ──────────────────────────────────
-        _sectionHeader(ctx, Icons.emoji_events_rounded, 'Achievements', 'Earned through navigation, posts and exploration'),
+        _sectionHeader(ctx, Icons.emoji_events_rounded, 'Achievements',
+            'Earned through navigation, posts and exploration. Tap ⓘ for requirements.'),
         const SizedBox(height: 12),
         GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
+          crossAxisCount: 2, shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
-          childAspectRatio: 0.8,
+          crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: 0.78,
           children: [
-            () { final t = badgeTierD(s.totalKm, kmThresholds); final p = badgeProgressD(s.totalKm, kmThresholds);
-              return _BadgeCard(name: 'Long Hauler', icon: Icons.route_rounded, iconColor: const Color(0xFFFF7043),
-                tier: t, progressFrac: p.frac, progressLabel: p.label, thresholdLabel: nextTierLabelD(t, kmThresholds, 'km')); }(),
-            () { final t = badgeTier(s.postsCount, postThresholds); final p = badgeProgress(s.postsCount, postThresholds);
-              return _BadgeCard(name: 'Storyteller', icon: Icons.auto_stories_rounded, iconColor: const Color(0xFF66BB6A),
-                tier: t, progressFrac: p.frac, progressLabel: p.label, thresholdLabel: nextTierLabel(t, postThresholds)); }(),
-            () { final t = badgeTier(distinctNat, explorerThresholds); final p = badgeProgress(distinctNat, explorerThresholds);
-              return _BadgeCard(name: 'True Explorer', icon: Icons.explore_rounded, iconColor: const Color(0xFF26C6DA),
-                tier: t, progressFrac: p.frac, progressLabel: '$distinctNat / ${_nextTarget(t, explorerThresholds)} categories',
-                thresholdLabel: nextTierLabel(t, explorerThresholds)); }(),
-            () { final t = badgeTier(s.totalNavigations, navThresholds); final p = badgeProgress(s.totalNavigations, navThresholds);
-              return _BadgeCard(name: 'Road Warrior', icon: Icons.navigation_rounded, iconColor: const Color(0xFF42A5F5),
-                tier: t, progressFrac: p.frac, progressLabel: p.label, thresholdLabel: nextTierLabel(t, navThresholds)); }(),
+            () {
+              final def = achievBadgeDefs[0];
+              final t = badgeTierD(s.totalKm, kmThresholds);
+              final p = badgeProgressD(s.totalKm, kmThresholds);
+              return _BadgeCard(name: def.name, icon: def.icon, iconColor: def.color,
+                  tier: t, progressFrac: p.frac, progressLabel: p.label,
+                  thresholdLabel: nextTierLabelD(t, kmThresholds, 'km'),
+                  onInfo: () => _showAchievInfo(ctx, def, [10, 50, 150, 500], 'km',
+                      'Total kilometers traveled across all your navigation sessions.'));
+            }(),
+            () {
+              final def = achievBadgeDefs[1];
+              final t = badgeTier(s.postsCount, postThresholds);
+              final p = badgeProgress(s.postsCount, postThresholds);
+              return _BadgeCard(name: def.name, icon: def.icon, iconColor: def.color,
+                  tier: t, progressFrac: p.frac, progressLabel: p.label,
+                  thresholdLabel: nextTierLabel(t, postThresholds),
+                  onInfo: () => _showAchievInfo(ctx, def, postThresholds, 'posts',
+                      'Total posts published at any location.'));
+            }(),
+            () {
+              final def = achievBadgeDefs[2];
+              final t = badgeTier(distinctNat, explorerThresholds);
+              final p = badgeProgress(distinctNat, explorerThresholds);
+              return _BadgeCard(name: def.name, icon: def.icon, iconColor: def.color,
+                  tier: t, progressFrac: p.frac,
+                  progressLabel: '$distinctNat / ${_nextT(t, explorerThresholds)} categories',
+                  thresholdLabel: nextTierLabel(t, explorerThresholds),
+                  onInfo: () => _showAchievInfo(ctx, def, explorerThresholds, 'categories',
+                      'Number of distinct natural place types visited (peak, lake, cave, ruin, spring, viewpoint).'));
+            }(),
+            () {
+              final def = achievBadgeDefs[3];
+              final t = badgeTier(s.totalNavigations, navThresholds);
+              final p = badgeProgress(s.totalNavigations, navThresholds);
+              return _BadgeCard(name: def.name, icon: def.icon, iconColor: def.color,
+                  tier: t, progressFrac: p.frac, progressLabel: p.label,
+                  thresholdLabel: nextTierLabel(t, navThresholds),
+                  onInfo: () => _showAchievInfo(ctx, def, navThresholds, 'navigations',
+                      'Total number of navigation sessions completed (destination reached or manually stopped).'));
+            }(),
           ],
         ),
         const SizedBox(height: 16),
@@ -229,22 +439,22 @@ class _StatsScreenState extends State<StatsScreen> {
         Card(
           child: Padding(
             padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('XP Breakdown', style: Theme.of(ctx).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 10),
-                _XpRow('Places visited', '${s.totalVisits} × 10', s.totalVisits * 10),
-                _XpRow('km traveled', '${s.totalKm.toStringAsFixed(1)} × 2', (s.totalKm * 2).round()),
-                _XpRow('Posts published', '${s.postsCount} × 25', s.postsCount * 25),
-                _XpRow('Badge bonuses', 'unlocking tiers', xp - s.totalVisits * 10 - (s.totalKm * 2).round() - s.postsCount * 25),
-                const Divider(height: 16),
-                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                  Text('Total', style: const TextStyle(fontWeight: FontWeight.w700)),
-                  Text('$xp XP', style: TextStyle(fontWeight: FontWeight.w700, color: Theme.of(ctx).colorScheme.primary)),
-                ]),
-              ],
-            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('XP Breakdown',
+                  style: Theme.of(ctx).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 10),
+              _XpRow('Places visited', '${s.totalVisits} × 10', s.totalVisits * 10),
+              _XpRow('km traveled', '${s.totalKm.toStringAsFixed(1)} × 2', (s.totalKm * 2).round()),
+              _XpRow('Posts published', '${s.postsCount} × 25', s.postsCount * 25),
+              _XpRow('Badge bonuses', 'unlocking tiers',
+                  xp - s.totalVisits * 10 - (s.totalKm * 2).round() - s.postsCount * 25),
+              const Divider(height: 16),
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                const Text('Total', style: TextStyle(fontWeight: FontWeight.w700)),
+                Text('$xp XP', style: TextStyle(fontWeight: FontWeight.w700,
+                    color: Theme.of(ctx).colorScheme.primary)),
+              ]),
+            ]),
           ),
         ),
         const SizedBox(height: 16),
@@ -253,26 +463,24 @@ class _StatsScreenState extends State<StatsScreen> {
         Card(
           child: Padding(
             padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Tier Thresholds (place badges)', style: Theme.of(ctx).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 8),
-                Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-                  _TierChip(tier: BadgeTier.bronze,   label: '5+'),
-                  _TierChip(tier: BadgeTier.silver,   label: '15+'),
-                  _TierChip(tier: BadgeTier.gold,     label: '25+'),
-                  _TierChip(tier: BadgeTier.platinum, label: '40+'),
-                ]),
-              ],
-            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Place Badge Thresholds',
+                  style: Theme.of(ctx).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+                _TierChip(tier: BadgeTier.bronze,   label: '5+'),
+                _TierChip(tier: BadgeTier.silver,   label: '15+'),
+                _TierChip(tier: BadgeTier.gold,     label: '25+'),
+                _TierChip(tier: BadgeTier.platinum, label: '40+'),
+              ]),
+            ]),
           ),
         ),
       ],
     );
   }
 
-  int _nextTarget(BadgeTier t, List<int> thresholds) {
+  int _nextT(BadgeTier t, List<int> thresholds) {
     if (t == BadgeTier.platinum) return thresholds[3];
     if (t == BadgeTier.gold)     return thresholds[3];
     if (t == BadgeTier.silver)   return thresholds[2];
@@ -335,7 +543,8 @@ class _StatCard extends StatelessWidget {
             const SizedBox(height: 6),
             Text(value, style: Theme.of(ctx).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800, color: color)),
             const SizedBox(height: 2),
-            Text(label, style: Theme.of(ctx).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant), textAlign: TextAlign.center),
+            Text(label, style: Theme.of(ctx).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                textAlign: TextAlign.center),
           ]),
         ),
       ),
@@ -349,11 +558,12 @@ class _BadgeCard extends StatelessWidget {
   final Color iconColor;
   final BadgeTier tier;
   final double progressFrac;
+  final VoidCallback? onInfo;
 
   const _BadgeCard({
     required this.name, required this.icon, required this.iconColor,
     required this.tier, required this.progressFrac, required this.progressLabel,
-    required this.thresholdLabel,
+    required this.thresholdLabel, this.onInfo,
   });
 
   @override
@@ -363,60 +573,76 @@ class _BadgeCard extends StatelessWidget {
     final earned = tier != BadgeTier.locked;
 
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(10, 14, 10, 10),
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Stack(alignment: Alignment.bottomRight, children: [
-            Container(
-              width: 64, height: 64,
-              decoration: BoxDecoration(
-                color: earned ? iconColor.withValues(alpha: 0.12) : cs.surfaceContainerHighest,
-                shape: BoxShape.circle,
-                border: Border.all(color: tc, width: earned ? 3 : 1.5),
-              ),
-              child: Icon(icon, size: 30, color: earned ? iconColor : cs.outlineVariant),
-            ),
-            if (earned)
+      child: Stack(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 14, 10, 10),
+            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Stack(alignment: Alignment.bottomRight, children: [
+                Container(
+                  width: 64, height: 64,
+                  decoration: BoxDecoration(
+                    color: earned ? iconColor.withValues(alpha: 0.12) : cs.surfaceContainerHighest,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: tc, width: earned ? 3 : 1.5),
+                  ),
+                  child: Icon(icon, size: 30, color: earned ? iconColor : cs.outlineVariant),
+                ),
+                if (earned)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(color: tc, borderRadius: BorderRadius.circular(8)),
+                    child: Text(tierLabels[tier]![0],
+                        style: TextStyle(
+                          color: tier == BadgeTier.gold ? Colors.black87 : Colors.white,
+                          fontWeight: FontWeight.w900, fontSize: 11)),
+                  ),
+              ]),
+              const SizedBox(height: 10),
+              Text(name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                  textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 3),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                decoration: BoxDecoration(color: tc, borderRadius: BorderRadius.circular(8)),
-                child: Text(tierLabels[tier]![0],
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                    color: tc.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
+                child: Text(tierLabels[tier]!.toUpperCase(),
                     style: TextStyle(
-                      color: tier == BadgeTier.gold ? Colors.black87 : Colors.white,
-                      fontWeight: FontWeight.w900, fontSize: 11)),
+                      color: tier == BadgeTier.gold ? const Color(0xFFB8860B) : tc,
+                      fontWeight: FontWeight.w800, fontSize: 10, letterSpacing: 0.8)),
               ),
-          ]),
-          const SizedBox(height: 10),
-          Text(name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-              textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
-          const SizedBox(height: 3),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: tc.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(tierLabels[tier]!.toUpperCase(),
-                style: TextStyle(
-                  color: tier == BadgeTier.gold ? const Color(0xFFB8860B) : tc,
-                  fontWeight: FontWeight.w800, fontSize: 10, letterSpacing: 0.8)),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: progressFrac, minHeight: 5,
+                  backgroundColor: cs.surfaceContainerHighest,
+                  valueColor: AlwaysStoppedAnimation<Color>(tc),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(progressLabel, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+              const SizedBox(height: 2),
+              Text(thresholdLabel,
+                  style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant.withValues(alpha: 0.7)),
+                  textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
+            ]),
           ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: progressFrac, minHeight: 5,
-              backgroundColor: cs.surfaceContainerHighest,
-              valueColor: AlwaysStoppedAnimation<Color>(tc),
+          // ⓘ info button — top right
+          if (onInfo != null)
+            Positioned(
+              top: 4, right: 4,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(20),
+                onTap: onInfo,
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(Icons.info_outline_rounded,
+                      size: 18, color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
+                ),
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(progressLabel, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-          const SizedBox(height: 2),
-          Text(thresholdLabel,
-              style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant.withValues(alpha: 0.7)),
-              textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
-        ]),
+        ],
       ),
     );
   }

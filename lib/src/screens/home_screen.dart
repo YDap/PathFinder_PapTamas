@@ -1412,6 +1412,19 @@ class _HomeScreenState extends State<HomeScreen> {
                     },
                   ),
                   // ── Recently unlocked ──────────────────────
+                  if (_cachedStats != null && _recentlyUnlocked.isEmpty) ...[
+                    const Divider(height: 24),
+                    Row(children: [
+                      Icon(Icons.emoji_events_outlined, size: 16, color: cs.onSurfaceVariant),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'No badges yet — navigate to 5 places of the same type to earn your first Bronze badge.',
+                          style: Theme.of(ctx).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                        ),
+                      ),
+                    ]),
+                  ],
                   if (_recentlyUnlocked.isNotEmpty) ...[
                     const Divider(height: 24),
                     Text(
@@ -2011,7 +2024,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 item(Icons.wb_sunny_rounded, 'Weather Forecast',
                     'Tap any place marker, then tap "48h Weather Forecast" to see an hourly temperature and conditions timeline for that exact location for the next 48 hours, powered by Open-Meteo.'),
                 item(Icons.emoji_events_rounded, 'Stats & Badges',
-                    'Found in your Profile under "Stats & Badges". Tracks your total km traveled, places visited and posts published. Earn Bronze, Silver, Gold and Platinum badges for each place category (5 / 15 / 25 / 40 visits) and for overall achievements like distance covered and posts written. Every badge and activity earns you XP, which grows an XP bar and levels you up — from Wanderer (Level 1) all the way to Grand Pathfinder (Level 20+). Your current level and progress bar are always visible at the top of your Profile. Recently unlocked badges appear below the logout button.'),
+                    'Found in your Profile under "Stats & Badges". Tracks your km traveled, places visited and posts published. Earn Bronze / Silver / Gold / Platinum badges for each natural place category (5 / 15 / 25 / 40 destinations reached) and for achievements like distance and posts. Tap the ⓘ button on any badge to see its exact requirements. Every badge tier and activity earns XP — your XP bar fills up and you level up, from Wanderer (Lv.1) to Grand Pathfinder (Lv.20+). Tap the level card in the Stats screen to see all 20 level titles and their XP thresholds. Your current level and progress bar show at the top of your Profile. Once you unlock a badge it appears in the Recently Unlocked section below the logout button.'),
                 const SizedBox(height: 8),
                 FilledButton(
                   onPressed: () => Navigator.pop(ctx),
