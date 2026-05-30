@@ -125,7 +125,7 @@ class PlacesLayerState extends State<PlacesLayer> {
 
   void _scheduleReload() {
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 500), _loadNow);
+    _debounce = Timer(const Duration(milliseconds: 300), _loadNow);
   }
 
   Future<void> _loadNow() async {
@@ -139,21 +139,23 @@ class PlacesLayerState extends State<PlacesLayer> {
       final sw = bounds.southWest;
       final ne = bounds.northEast;
 
-      // Fetch a slightly larger area (25% padding each side) so nearby
-      // places are already cached before the user pans to them.
-      final latPad = (ne.latitude  - sw.latitude)  * 0.25;
-      final lngPad = (ne.longitude - sw.longitude) * 0.25;
+      setState(() { _loading = true; _lastError = null; });
 
-      setState(() {
-        _loading = true;
-        _lastError = null;
-      });
-
-      final data = await widget.api.fetchInBounds(
-        southWest: LatLng(sw.latitude  - latPad, sw.longitude - lngPad),
-        northEast: LatLng(ne.latitude  + latPad, ne.longitude + lngPad),
-        limit: widget.limit,
-      );
+      final List<Place> data;
+      if (widget.mapController.camera.zoom < 11) {
+        // Large viewport: split into 4 quadrants fetched in parallel so that
+        // places near the edges of the screen are covered, not just the centre.
+        data = await _fetchTiled(sw, ne);
+      } else {
+        // Smaller viewport: single fetch with 25% padding is sufficient.
+        final latPad = (ne.latitude  - sw.latitude)  * 0.25;
+        final lngPad = (ne.longitude - sw.longitude) * 0.25;
+        data = await widget.api.fetchInBounds(
+          southWest: LatLng(sw.latitude  - latPad, sw.longitude - lngPad),
+          northEast: LatLng(ne.latitude  + latPad, ne.longitude + lngPad),
+          limit: widget.limit,
+        );
+      }
 
       if (!mounted) return;
       setState(() {
@@ -170,11 +172,47 @@ class PlacesLayerState extends State<PlacesLayer> {
       _notifyWaypoints();
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _lastError = e;
-      });
+      setState(() { _loading = false; _lastError = e; });
     }
+  }
+
+  /// Divides [sw]→[ne] into 4 quadrants and fetches them concurrently.
+  /// Deduplicates by place ID before returning. Each quadrant uses 25%
+  /// padding so tiles overlap slightly and leave no gaps between them.
+  Future<List<Place>> _fetchTiled(LatLng sw, LatLng ne) async {
+    final midLat = (sw.latitude  + ne.latitude)  / 2;
+    final midLng = (sw.longitude + ne.longitude) / 2;
+    final latPad = (ne.latitude  - sw.latitude)  * 0.15;
+    final lngPad = (ne.longitude - sw.longitude) * 0.15;
+
+    final results = await Future.wait([
+      widget.api.fetchInBounds(                                     // SW
+        southWest: LatLng(sw.latitude  - latPad, sw.longitude - lngPad),
+        northEast: LatLng(midLat       + latPad, midLng       + lngPad),
+        limit: widget.limit,
+      ),
+      widget.api.fetchInBounds(                                     // SE
+        southWest: LatLng(sw.latitude  - latPad, midLng       - lngPad),
+        northEast: LatLng(midLat       + latPad, ne.longitude + lngPad),
+        limit: widget.limit,
+      ),
+      widget.api.fetchInBounds(                                     // NW
+        southWest: LatLng(midLat       - latPad, sw.longitude - lngPad),
+        northEast: LatLng(ne.latitude  + latPad, midLng       + lngPad),
+        limit: widget.limit,
+      ),
+      widget.api.fetchInBounds(                                     // NE
+        southWest: LatLng(midLat       - latPad, midLng       - lngPad),
+        northEast: LatLng(ne.latitude  + latPad, ne.longitude + lngPad),
+        limit: widget.limit,
+      ),
+    ]);
+
+    final merged = <String, Place>{};
+    for (final list in results) {
+      for (final p in list) { merged[p.id] = p; }
+    }
+    return merged.values.toList();
   }
 
   Color _colorFor(String category) {
