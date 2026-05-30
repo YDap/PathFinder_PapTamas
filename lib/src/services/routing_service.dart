@@ -68,6 +68,23 @@ class RoutingService {
     return totalDistance;
   }
 
+  /// Distance in meters from the start of [polyline] to the point on it
+  /// closest to [target]. Used to position waypoints on the progress bar.
+  static double distanceAlongPolyline(List<LatLng> polyline, LatLng target) {
+    if (polyline.isEmpty) return 0;
+    const dist = Distance();
+    double minDist = double.infinity;
+    int closestIdx = 0;
+    for (int i = 0; i < polyline.length; i++) {
+      final d = dist.as(LengthUnit.Meter, polyline[i], target);
+      if (d < minDist) {
+        minDist = d;
+        closestIdx = i;
+      }
+    }
+    return calculatePolylineDistance(polyline.sublist(0, closestIdx + 1));
+  }
+
   /// Find the closest point on a polyline to a given location
   /// Returns the index of the closest segment and the remaining polyline
   static MapEntry<int, List<LatLng>> findClosestPointAndRemovePath(

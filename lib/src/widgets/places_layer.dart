@@ -28,6 +28,7 @@ class PlacesLayer extends StatefulWidget {
   final bool isAdmin;
   final Function(Place)? onNavigate;
   final List<LatLng> routePolyline;
+  final Function(List<Place>)? onRouteWaypointsChanged;
 
   const PlacesLayer({
     super.key,
@@ -43,6 +44,7 @@ class PlacesLayer extends StatefulWidget {
     this.isAdmin = false,
     this.onNavigate,
     this.routePolyline = const [],
+    this.onRouteWaypointsChanged,
   });
 
   @override
@@ -64,6 +66,10 @@ class PlacesLayerState extends State<PlacesLayer> {
 
   static const int _maxCacheSize = 4000;
 
+  // Tracks the last set of waypoint IDs sent via the callback so we only fire
+  // when the list actually changes.
+  List<String> _lastWaypointIds = [];
+
   @override
   void initState() {
     super.initState();
@@ -79,10 +85,40 @@ class PlacesLayerState extends State<PlacesLayer> {
   }
 
   @override
+  void didUpdateWidget(PlacesLayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Re-evaluate waypoints when the route polyline is set or cleared.
+    if (oldWidget.routePolyline != widget.routePolyline) {
+      _notifyWaypoints();
+    }
+  }
+
+  @override
   void dispose() {
     _sub?.cancel();
     _debounce?.cancel();
     super.dispose();
+  }
+
+  void _notifyWaypoints() {
+    final cb = widget.onRouteWaypointsChanged;
+    if (cb == null) return;
+    if (widget.routePolyline.isEmpty) {
+      if (_lastWaypointIds.isNotEmpty) {
+        _lastWaypointIds = [];
+        cb([]);
+      }
+      return;
+    }
+    final waypoints = _cache.values
+        .where((p) =>
+            _waypointCategories.contains(_normalizeCategory(p.category)) &&
+            _isNearRoute(p))
+        .toList();
+    final ids = (waypoints.map((p) => p.id).toList()..sort()).join(',');
+    if (ids == _lastWaypointIds.join(',')) return;
+    _lastWaypointIds = ids.isEmpty ? [] : ids.split(',');
+    cb(waypoints);
   }
 
   void selectPlace(Place p) => _openPlaceSheet(p);
@@ -131,6 +167,7 @@ class PlacesLayerState extends State<PlacesLayer> {
         }
         _loading = false;
       });
+      _notifyWaypoints();
     } catch (e) {
       if (!mounted) return;
       setState(() {

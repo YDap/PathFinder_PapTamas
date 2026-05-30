@@ -62,6 +62,29 @@ class _HomeScreenState extends State<HomeScreen> {
   double _distanceToDestination = 0;
   double _totalRouteDistance = 0;
 
+  // Waypoints along the active route (natural places within 600 m of the route)
+  List<Place> _routeWaypoints = [];
+  // Pre-computed bar fractions: placeId → 0..1 position on the progress bar.
+  // Recomputed only when waypoints change, not on every position update.
+  Map<String, double> _waypointFractions = {};
+
+  void _updateWaypointFractions() {
+    if (_routePolyline.isEmpty || _totalRouteDistance <= 0) {
+      _waypointFractions = {};
+      return;
+    }
+    final walked = _totalRouteDistance - _distanceToDestination;
+    final fracs = <String, double>{};
+    for (final wp in _routeWaypoints) {
+      final fromNow = RoutingService.distanceAlongPolyline(
+        _routePolyline,
+        LatLng(wp.latitude, wp.longitude),
+      ) / 1000; // meters → km
+      fracs[wp.id] = ((walked + fromNow) / _totalRouteDistance).clamp(0.0, 1.0);
+    }
+    setState(() => _waypointFractions = fracs);
+  }
+
   // Navigate Together state
   String? _navSessionId;
   String? _navPartnerName;
@@ -184,6 +207,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 onNavigate: _startNavigation,
                 isAdmin: _isAdmin,
                 routePolyline: _routePolyline,
+                onRouteWaypointsChanged: (wps) {
+                  if (!mounted) return;
+                  setState(() => _routeWaypoints = wps);
+                  _updateWaypointFractions();
+                },
               ),
               // Navigation route polyline (own — blue)
               if (_routePolyline.isNotEmpty)
@@ -428,24 +456,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           ],
                         ),
                         const SizedBox(height: 12),
-                        // Distance progress bar
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: LinearProgressIndicator(
-                            value: (_navigationDestination != null &&
-                                    _totalRouteDistance > 0)
-                                ? ((_totalRouteDistance -
-                                            _distanceToDestination) /
-                                        _totalRouteDistance)
-                                    .clamp(0, 1)
-                                : 0,
-                            minHeight: 8,
-                            backgroundColor: cs.outlineVariant,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              cs.primary,
-                            ),
-                          ),
-                        ),
+                        // Distance progress bar with waypoint dots
+                        _buildProgressBar(cs),
                         const SizedBox(height: 12),
                         // Navigate Together row
                         if (_navSessionId != null) ...[
@@ -1562,6 +1574,122 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       },
     );
+  }
+
+  // ── Route progress bar with waypoint dots ────────────────────────────────
+
+  Widget _buildProgressBar(ColorScheme cs) {
+    final progress = _totalRouteDistance > 0
+        ? ((_totalRouteDistance - _distanceToDestination) / _totalRouteDistance)
+            .clamp(0.0, 1.0)
+        : 0.0;
+
+    const trackH = 8.0;
+    const dotSize = 22.0;
+    const totalH = 30.0;
+
+    return LayoutBuilder(
+      builder: (_, constraints) {
+        final w = constraints.maxWidth;
+        return SizedBox(
+          height: totalH,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // Track background
+              Positioned(
+                top: (totalH - trackH) / 2,
+                left: 0,
+                right: 0,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: Container(height: trackH, color: cs.outlineVariant),
+                ),
+              ),
+              // Progress fill
+              Positioned(
+                top: (totalH - trackH) / 2,
+                left: 0,
+                width: w * progress,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: Container(height: trackH, color: cs.primary),
+                ),
+              ),
+              // Waypoint dots
+              ..._waypointFractions.entries.map((e) {
+                final place = _routeWaypoints.firstWhere(
+                  (wp) => wp.id == e.key,
+                  orElse: () => _routeWaypoints.first,
+                );
+                final left = (w * e.value - dotSize / 2).clamp(0.0, w - dotSize);
+                return Positioned(
+                  left: left,
+                  top: (totalH - dotSize) / 2,
+                  child: GestureDetector(
+                    onTap: () {
+                      _mapController.move(
+                        LatLng(place.latitude, place.longitude),
+                        _mapController.camera.zoom,
+                      );
+                      Future.delayed(const Duration(milliseconds: 300), () {
+                        _placesLayerKey.currentState?.selectPlace(place);
+                      });
+                    },
+                    child: Tooltip(
+                      message: place.name.isEmpty ? place.category : place.name,
+                      child: Container(
+                        width: dotSize,
+                        height: dotSize,
+                        decoration: BoxDecoration(
+                          color: _waypointDotColor(place.category),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                          boxShadow: const [
+                            BoxShadow(blurRadius: 4, color: Colors.black38),
+                          ],
+                        ),
+                        child: Icon(
+                          _waypointDotIcon(place.category),
+                          size: 11,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Color _waypointDotColor(String cat) {
+    switch (cat.toLowerCase()) {
+      case 'peak':                          return Colors.deepPurple;
+      case 'lake':                          return Colors.blueAccent;
+      case 'cave': case 'cave_entrance':    return Colors.brown;
+      case 'ruin': case 'ruins':
+      case 'archaeological_site':           return Colors.redAccent;
+      case 'spring':                        return Colors.teal;
+      case 'viewpoint':                     return Colors.indigo;
+      default:                              return Colors.orange;
+    }
+  }
+
+  IconData _waypointDotIcon(String cat) {
+    switch (cat.toLowerCase()) {
+      case 'peak':                          return Icons.landscape;
+      case 'lake':                          return Icons.water_rounded;
+      case 'cave': case 'cave_entrance':    return Icons.terrain;
+      case 'ruin': case 'ruins':
+      case 'archaeological_site':           return Icons.account_balance;
+      case 'spring':                        return Icons.water_drop;
+      case 'viewpoint':                     return Icons.visibility;
+      default:                              return Icons.place;
+    }
   }
 
   void _showHelpDialog(BuildContext context) {
