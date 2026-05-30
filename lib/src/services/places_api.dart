@@ -302,6 +302,37 @@ class PartnerLocation {
 }
 
 // ─────────────────────────────────────────────────────────────
+// UserStats model
+// ─────────────────────────────────────────────────────────────
+class UserStats {
+  final double totalKm;
+  final int totalNavigations;
+  final int postsCount;
+  final Map<String, int> visitsByCategory;
+  final int totalVisits;
+
+  const UserStats({
+    required this.totalKm,
+    required this.totalNavigations,
+    required this.postsCount,
+    required this.visitsByCategory,
+    required this.totalVisits,
+  });
+
+  factory UserStats.fromJson(Map<String, dynamic> j) {
+    final raw = (j['visits_by_category'] as Map<String, dynamic>? ?? {});
+    final visits = raw.map((k, v) => MapEntry(k, (v as num).toInt()));
+    return UserStats(
+      totalKm:           (j['total_km']          as num?)?.toDouble() ?? 0,
+      totalNavigations:  (j['total_navigations']  as num?)?.toInt()    ?? 0,
+      postsCount:        (j['posts_count']        as num?)?.toInt()    ?? 0,
+      visitsByCategory:  visits,
+      totalVisits:       (j['total_visits']       as num?)?.toInt()    ?? 0,
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
 // AiQueryResult model
 // ─────────────────────────────────────────────────────────────
 class AiQueryResult {
@@ -326,6 +357,13 @@ class AiQueryResult {
 class PlacesApi {
   final String baseUrl;
   const PlacesApi({required this.baseUrl});
+
+  /// Hits the health endpoint — call on app startup to wake a sleeping server.
+  Future<void> warmUp() async {
+    try {
+      await http.get(Uri.parse(baseUrl)).timeout(const Duration(seconds: 30));
+    } catch (_) {}
+  }
 
   Future<String> _getToken() async {
     final user = FirebaseAuth.instance.currentUser;
@@ -879,5 +917,39 @@ class PlacesApi {
     final token = await _getToken();
     await http.delete(Uri.parse('$baseUrl/navigate/session/$sessionId'),
         headers: {..._jsonHeaders, 'Authorization': 'Bearer $token'});
+  }
+
+  // ── Stats & Achievements ─────────────────────────────────────
+
+  Future<void> recordVisit({
+    required String placeId,
+    required String placeName,
+    required String category,
+  }) async {
+    final headers = await _authHeaders();
+    await http
+        .post(Uri.parse('$baseUrl/stats/visit'),
+            headers: headers,
+            body: json.encode({'placeId': placeId, 'placeName': placeName, 'category': category}))
+        .timeout(const Duration(seconds: 10));
+  }
+
+  Future<void> addKm(double km) async {
+    if (km <= 0) return;
+    final headers = await _authHeaders();
+    await http
+        .post(Uri.parse('$baseUrl/stats/km'),
+            headers: headers,
+            body: json.encode({'km': km}))
+        .timeout(const Duration(seconds: 10));
+  }
+
+  Future<UserStats> fetchMyStats() async {
+    final headers = await _authHeaders();
+    final res = await http
+        .get(Uri.parse('$baseUrl/stats/me'), headers: headers)
+        .timeout(const Duration(seconds: 10));
+    if (res.statusCode != 200) throw Exception('Failed to fetch stats');
+    return UserStats.fromJson(json.decode(res.body) as Map<String, dynamic>);
   }
 }

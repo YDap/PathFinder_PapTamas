@@ -20,6 +20,7 @@ import '../app.dart';
 import 'login_screen.dart';
 import 'admin_screen.dart';
 import 'friends_screen.dart';
+import 'stats_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   static const routeName = '/home';
@@ -729,6 +730,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
     // If very close to destination, stop navigation
     if (distToDestination < 0.05) {
+      // Record stats before clearing state
+      final dest = _navigationDestination;
+      final totalKm = _totalRouteDistance;
+      if (dest != null && !dest.id.startsWith('nav_') && dest.id.isNotEmpty) {
+        _placesApi.recordVisit(
+          placeId: dest.id,
+          placeName: dest.name,
+          category: _statCategory(dest.category),
+        ).catchError((_) {});
+      }
+      if (totalKm > 0) _placesApi.addKm(totalKm).catchError((_) {});
+
       setState(() {
         _isNavigating = false;
         _routePolyline = [];
@@ -765,6 +778,11 @@ class _HomeScreenState extends State<HomeScreen> {
     // End any active shared session so the partner's polyline clears immediately.
     if (_navSessionId != null) {
       _endNavSession();
+    }
+    // Record the km walked so far even if destination wasn't reached.
+    if (_totalRouteDistance > 0) {
+      final walked = _totalRouteDistance - _distanceToDestination;
+      if (walked > 0.1) _placesApi.addKm(walked).catchError((_) {});
     }
     setState(() {
       _isNavigating = false;
@@ -1249,6 +1267,23 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 10),
                   ],
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => StatsScreen(api: _placesApi),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.emoji_events_rounded),
+                      label: const Text('Stats & Badges'),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
                   Row(
                     children: [
                       Expanded(
@@ -1596,6 +1631,17 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       },
     );
+  }
+
+  // ── Stats helpers ─────────────────────────────────────────────────────────
+
+  /// Normalise raw OSM category names to the canonical keys used for badges.
+  static String _statCategory(String category) {
+    switch (category.toLowerCase()) {
+      case 'cave_entrance': case 'caves': return 'cave';
+      case 'ruins': case 'archaeological_site': return 'ruin';
+      default: return category.toLowerCase();
+    }
   }
 
   // ── Route progress bar with waypoint dots ────────────────────────────────
