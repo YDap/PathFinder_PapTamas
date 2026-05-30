@@ -477,7 +477,7 @@ class PlacesLayerState extends State<PlacesLayer> {
                     );
                   },
                   icon: const Icon(Icons.wb_sunny_rounded),
-                  label: const Text('24h Weather Forecast'),
+                  label: const Text('48h Weather Forecast'),
                 ),
               ),
               const SizedBox(height: 8),
