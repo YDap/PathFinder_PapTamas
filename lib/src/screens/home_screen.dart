@@ -1280,8 +1280,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
         return DraggableScrollableSheet(
           expand: false,
-          initialChildSize: 0.42,
-          minChildSize: 0.32,
+          initialChildSize: 0.78,
+          minChildSize: 0.5,
           maxChildSize: 0.9,
           builder: (ctx, scrollCtl) {
             return Padding(

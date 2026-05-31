@@ -422,7 +422,7 @@ class PlacesApi {
                 'https://api.github.com/repos/YDap/PathFinder_PapTamas/releases/latest'),
             headers: {'Accept': 'application/vnd.github.v3+json'},
           )
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 30));
       if (res.statusCode != 200) return null;
       final body = json.decode(res.body) as Map<String, dynamic>;
       final tag =
@@ -516,7 +516,7 @@ class PlacesApi {
     try {
       final res = await http
           .get(uri, headers: _jsonHeaders)
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 30));
       return _parsePlaceList(res);
     } on TimeoutException {
       throw Exception('Timeout searching places');
@@ -531,7 +531,7 @@ class PlacesApi {
     try {
       final res = await http
           .get(uri, headers: _jsonHeaders)
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 30));
       if (res.statusCode == 404) throw Exception('Place not found');
       if (res.statusCode != 200) {
         throw Exception('HTTP ${res.statusCode}: ${res.body}');
@@ -555,7 +555,7 @@ class PlacesApi {
             headers: headers,
             body: json.encode({'rating': rating}),
           )
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 30));
       if (res.statusCode != 201) {
         final body = json.decode(res.body);
         throw Exception(body['error'] ?? 'Failed to submit rating');
@@ -601,7 +601,7 @@ class PlacesApi {
     try {
       final res = await http
           .get(uri, headers: _jsonHeaders)
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 30));
       if (res.statusCode != 200) {
         throw Exception('HTTP ${res.statusCode}: ${res.body}');
       }
@@ -624,7 +624,7 @@ class PlacesApi {
       final res = await http
           .post(uri,
               headers: headers, body: json.encode({'content': content}))
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 30));
       if (res.statusCode != 201) {
         final body = json.decode(res.body) as Map<String, dynamic>;
         throw Exception(body['error'] ?? 'Failed to post comment');
@@ -644,7 +644,7 @@ class PlacesApi {
       final headers = await _authHeaders();
       final res = await http
           .get(uri, headers: headers)
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 30));
       if (res.statusCode != 200) return (imageUrl: null, isAdmin: false);
       final body = json.decode(res.body) as Map<String, dynamic>;
       final rel = body['profile_image_url']?.toString();
@@ -662,7 +662,7 @@ class PlacesApi {
     final uri = Uri.parse('$baseUrl/posts/$postId/report');
     try {
       final headers = await _authHeaders();
-      await http.post(uri, headers: headers).timeout(const Duration(seconds: 10));
+      await http.post(uri, headers: headers).timeout(const Duration(seconds: 30));
     } on TimeoutException {
       throw Exception('Timeout reporting post');
     } on SocketException catch (e) {
@@ -677,7 +677,7 @@ class PlacesApi {
       final headers = await _authHeaders();
       final res = await http
           .get(uri, headers: headers)
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 30));
       if (res.statusCode != 200) {
         throw Exception('HTTP ${res.statusCode}');
       }
@@ -696,21 +696,21 @@ class PlacesApi {
   Future<void> adminDeletePost(int postId) async {
     final uri = Uri.parse('$baseUrl/admin/posts/$postId');
     final headers = await _authHeaders();
-    await http.delete(uri, headers: headers).timeout(const Duration(seconds: 10));
+    await http.delete(uri, headers: headers).timeout(const Duration(seconds: 30));
   }
 
   /// DELETE /admin/comments/:commentId  (requires admin)
   Future<void> adminDeleteComment(int commentId) async {
     final uri = Uri.parse('$baseUrl/admin/comments/$commentId');
     final headers = await _authHeaders();
-    await http.delete(uri, headers: headers).timeout(const Duration(seconds: 10));
+    await http.delete(uri, headers: headers).timeout(const Duration(seconds: 30));
   }
 
   /// DELETE /admin/reports/:postId — dismiss reports without deleting post
   Future<void> dismissReports(int postId) async {
     final uri = Uri.parse('$baseUrl/admin/reports/$postId');
     final headers = await _authHeaders();
-    await http.delete(uri, headers: headers).timeout(const Duration(seconds: 10));
+    await http.delete(uri, headers: headers).timeout(const Duration(seconds: 30));
   }
 
   /// GET /places/ratings/my  (requires auth)
@@ -720,7 +720,7 @@ class PlacesApi {
       final headers = await _authHeaders();
       final res = await http
           .get(uri, headers: headers)
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 30));
       return _parsePlaceList(res);
     } on TimeoutException {
       throw Exception('Timeout fetching ratings');
@@ -736,7 +736,7 @@ class PlacesApi {
     try {
       final res = await http
           .get(uri, headers: _jsonHeaders)
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 30));
       if (res.statusCode != 200) {
         throw Exception('HTTP ${res.statusCode}: ${res.body}');
       }
@@ -876,7 +876,7 @@ class PlacesApi {
       final headers = await _authHeaders();
       await http
           .post(uri, headers: headers, body: json.encode({'reason': reason}))
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 30));
     } on TimeoutException {
       throw Exception('Timeout reporting place');
     } on SocketException catch (e) {
@@ -889,7 +889,7 @@ class PlacesApi {
     final uri = Uri.parse('$baseUrl/admin/place-reports');
     try {
       final headers = await _authHeaders();
-      final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 10));
+      final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 30));
       if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');
       final List decoded = json.decode(res.body) as List;
       return decoded.map((e) => PlaceReport.fromJson(e as Map<String, dynamic>)).toList();
@@ -904,14 +904,14 @@ class PlacesApi {
   Future<void> adminDeletePlace(String placeId) async {
     final uri = Uri.parse('$baseUrl/admin/places/$placeId');
     final headers = await _authHeaders();
-    await http.delete(uri, headers: headers).timeout(const Duration(seconds: 10));
+    await http.delete(uri, headers: headers).timeout(const Duration(seconds: 30));
   }
 
   /// DELETE /admin/place-reports/:placeId  (requires admin)
   Future<void> adminDismissPlaceReports(String placeId) async {
     final uri = Uri.parse('$baseUrl/admin/place-reports/$placeId');
     final headers = await _authHeaders();
-    await http.delete(uri, headers: headers).timeout(const Duration(seconds: 10));
+    await http.delete(uri, headers: headers).timeout(const Duration(seconds: 30));
   }
 
   Future<String> inviteToNavigate(
@@ -1009,7 +1009,7 @@ class PlacesApi {
     try {
       final res = await http
           .get(Uri.parse('$baseUrl/leaderboard'), headers: _jsonHeaders)
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 30));
       if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');
       final List decoded = json.decode(res.body) as List;
       return decoded.map((e) => LeaderboardEntry.fromJson(e as Map<String, dynamic>)).toList();
@@ -1032,7 +1032,7 @@ class PlacesApi {
         .post(Uri.parse('$baseUrl/stats/visit'),
             headers: headers,
             body: json.encode({'placeId': placeId, 'placeName': placeName, 'category': category}))
-        .timeout(const Duration(seconds: 10));
+        .timeout(const Duration(seconds: 30));
   }
 
   Future<void> addKm(double km) async {
@@ -1042,14 +1042,14 @@ class PlacesApi {
         .post(Uri.parse('$baseUrl/stats/km'),
             headers: headers,
             body: json.encode({'km': km}))
-        .timeout(const Duration(seconds: 10));
+        .timeout(const Duration(seconds: 30));
   }
 
   Future<UserStats> fetchMyStats() async {
     final headers = await _authHeaders();
     final res = await http
         .get(Uri.parse('$baseUrl/stats/me'), headers: headers)
-        .timeout(const Duration(seconds: 10));
+        .timeout(const Duration(seconds: 30));
     if (res.statusCode != 200) throw Exception('Failed to fetch stats');
     return UserStats.fromJson(json.decode(res.body) as Map<String, dynamic>);
   }
