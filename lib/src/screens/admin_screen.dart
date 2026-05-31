@@ -214,7 +214,7 @@ class _AdminScreenState extends State<AdminScreen>
   Widget _buildPlacesTab(ColorScheme cs) {
     if (_loadingPlaces) return const Center(child: CircularProgressIndicator());
     if (_placeError != null) return _ErrorView(msg: _placeError!, onRetry: _loadPlaces);
-    if (_placeReports.isEmpty) return const _EmptyView(label: 'No user-submitted places yet.');
+    if (_placeReports.isEmpty) return const _EmptyView(label: 'No reported places.');
     return RefreshIndicator(
       onRefresh: _loadPlaces,
       child: ListView.separated(

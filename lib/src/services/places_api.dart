@@ -333,6 +333,33 @@ class UserStats {
 }
 
 // ─────────────────────────────────────────────────────────────
+// LeaderboardEntry model
+// ─────────────────────────────────────────────────────────────
+class LeaderboardEntry {
+  final String userId;
+  final String displayName;
+  final String? profileImageUrl;
+  final int totalXp;
+  final int rank;
+
+  const LeaderboardEntry({
+    required this.userId,
+    required this.displayName,
+    this.profileImageUrl,
+    required this.totalXp,
+    required this.rank,
+  });
+
+  factory LeaderboardEntry.fromJson(Map<String, dynamic> j) => LeaderboardEntry(
+        userId:         j['user_id'].toString(),
+        displayName:    j['display_name']?.toString() ?? 'Anonymous',
+        profileImageUrl: j['profile_image_url']?.toString(),
+        totalXp:        (j['total_xp'] as num?)?.toInt() ?? 0,
+        rank:           (j['rank'] as num?)?.toInt() ?? 0,
+      );
+}
+
+// ─────────────────────────────────────────────────────────────
 // AiQueryResult model
 // ─────────────────────────────────────────────────────────────
 class AiQueryResult {
@@ -917,6 +944,23 @@ class PlacesApi {
     final token = await _getToken();
     await http.delete(Uri.parse('$baseUrl/navigate/session/$sessionId'),
         headers: {..._jsonHeaders, 'Authorization': 'Bearer $token'});
+  }
+
+  // ── Leaderboard ──────────────────────────────────────────────
+
+  Future<List<LeaderboardEntry>> fetchLeaderboard() async {
+    try {
+      final res = await http
+          .get(Uri.parse('$baseUrl/leaderboard'), headers: _jsonHeaders)
+          .timeout(const Duration(seconds: 15));
+      if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');
+      final List decoded = json.decode(res.body) as List;
+      return decoded.map((e) => LeaderboardEntry.fromJson(e as Map<String, dynamic>)).toList();
+    } on TimeoutException {
+      throw Exception('Leaderboard request timed out');
+    } on SocketException catch (e) {
+      throw Exception('Network error: ${e.message}');
+    }
   }
 
   // ── Stats & Achievements ─────────────────────────────────────
