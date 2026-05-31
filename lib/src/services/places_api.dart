@@ -360,6 +360,27 @@ class LeaderboardEntry {
 }
 
 // ─────────────────────────────────────────────────────────────
+// VersionInfo model
+// ─────────────────────────────────────────────────────────────
+class VersionInfo {
+  final String version;
+  final String downloadUrl;
+  final String? releaseNotes;
+
+  const VersionInfo({
+    required this.version,
+    required this.downloadUrl,
+    this.releaseNotes,
+  });
+
+  factory VersionInfo.fromJson(Map<String, dynamic> j) => VersionInfo(
+        version:      j['version'].toString(),
+        downloadUrl:  j['download_url'].toString(),
+        releaseNotes: j['release_notes']?.toString(),
+      );
+}
+
+// ─────────────────────────────────────────────────────────────
 // AiQueryResult model
 // ─────────────────────────────────────────────────────────────
 class AiQueryResult {
@@ -390,6 +411,19 @@ class PlacesApi {
     try {
       await http.get(Uri.parse(baseUrl)).timeout(const Duration(seconds: 30));
     } catch (_) {}
+  }
+
+  /// GET /version — returns latest published version info, or null on error.
+  Future<VersionInfo?> fetchVersionInfo() async {
+    try {
+      final res = await http
+          .get(Uri.parse('$baseUrl/version'), headers: _jsonHeaders)
+          .timeout(const Duration(seconds: 10));
+      if (res.statusCode != 200) return null;
+      return VersionInfo.fromJson(json.decode(res.body) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<String> _getToken() async {

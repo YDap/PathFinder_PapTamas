@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -24,6 +25,9 @@ import 'friends_screen.dart';
 import 'stats_screen.dart';
 import 'leaderboard_screen.dart';
 import '../services/level_service.dart';
+
+// Bump this whenever you build a new release APK.
+const String _kAppVersion = '1.0.0';
 
 class HomeScreen extends StatefulWidget {
   static const routeName = '/home';
@@ -121,6 +125,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadProfileImage();
     _loadStatsBackground();
     _startInvitePolling();
+    _checkForUpdate();
     WidgetsBinding.instance.addPostFrameCallback((_) => _restoreNavigationState());
   }
 
@@ -161,6 +166,65 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (mounted) setState(() { _cachedStats = stats; _recentlyUnlocked = recent; });
     } catch (_) {}
+  }
+
+  // ── Update check ─────────────────────────────────────────────
+
+  Future<void> _checkForUpdate() async {
+    final info = await _placesApi.fetchVersionInfo();
+    if (info == null || !mounted) return;
+    if (_isNewerVersion(info.version, _kAppVersion)) {
+      _showUpdateDialog(info);
+    }
+  }
+
+  bool _isNewerVersion(String remote, String local) {
+    final parse = (String v) =>
+        v.split('.').map((p) => int.tryParse(p) ?? 0).toList();
+    final r = parse(remote);
+    final l = parse(local);
+    for (int i = 0; i < 3; i++) {
+      final rv = i < r.length ? r[i] : 0;
+      final lv = i < l.length ? l[i] : 0;
+      if (rv > lv) return true;
+      if (rv < lv) return false;
+    }
+    return false;
+  }
+
+  void _showUpdateDialog(VersionInfo info) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Update available'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Version ${info.version} is ready to install.'),
+            if (info.releaseNotes != null) ...[
+              const SizedBox(height: 8),
+              Text(info.releaseNotes!,
+                  style: Theme.of(ctx).textTheme.bodySmall),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Later'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final uri = Uri.parse(info.downloadUrl);
+              await launchUrl(uri, mode: LaunchMode.externalApplication);
+            },
+            child: const Text('Update now'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _loadProfileImage() async {
