@@ -351,11 +351,11 @@ class LeaderboardEntry {
   });
 
   factory LeaderboardEntry.fromJson(Map<String, dynamic> j) => LeaderboardEntry(
-        userId:         j['user_id'].toString(),
-        displayName:    j['display_name']?.toString() ?? 'Anonymous',
+        userId:          j['user_id'].toString(),
+        displayName:     j['display_name']?.toString() ?? 'Anonymous',
         profileImageUrl: j['profile_image_url']?.toString(),
-        totalXp:        (j['total_xp'] as num?)?.toInt() ?? 0,
-        rank:           (j['rank'] as num?)?.toInt() ?? 0,
+        totalXp:         int.tryParse(j['total_xp'].toString()) ?? 0,
+        rank:            int.tryParse(j['rank'].toString()) ?? 0,
       );
 }
 
