@@ -811,7 +811,7 @@ class _HomeScreenState extends State<HomeScreen> {
     Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: 5, // Update when moved 5 meters
+        distanceFilter: 2,
       ),
     ).listen((Position position) {
       if (_isNavigating && mounted) {
@@ -839,7 +839,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     // If very close to destination, stop navigation
-    if (distToDestination < 0.05) {
+    if (distToDestination < 0.08) {
       // Record stats before clearing state
       final dest = _navigationDestination;
       final totalKm = _totalRouteDistance;

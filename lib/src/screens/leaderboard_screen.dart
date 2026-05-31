@@ -187,7 +187,7 @@ class _EntryTile extends StatelessWidget {
   });
 
   static const _gold   = Color(0xFFFFD700);
-  static const _silver = Color(0xFFB0B7C3);
+  static const _silver = Color(0xFF607D8B); // blue-grey — distinct from card bg
   static const _bronze = Color(0xFFCD7F32);
 
   Color _rankColor(int rank) {
@@ -213,7 +213,7 @@ class _EntryTile extends StatelessWidget {
     // Subtle gold/silver/bronze card tint for top 3
     Color? cardColor;
     if (entry.rank == 1) cardColor = _gold.withValues(alpha: 0.07);
-    if (entry.rank == 2) cardColor = _silver.withValues(alpha: 0.07);
+    if (entry.rank == 2) cardColor = _silver.withValues(alpha: 0.09);
     if (entry.rank == 3) cardColor = _bronze.withValues(alpha: 0.07);
 
     return Card(
@@ -285,7 +285,7 @@ class _EntryTile extends StatelessWidget {
                           fontSize: 14,
                           color: entry.rank <= 3
                               ? (entry.rank == 1 ? const Color(0xFFB8860B) :
-                                 entry.rank == 2 ? const Color(0xFF808080) :
+                                 entry.rank == 2 ? const Color(0xFF37474F) :
                                  const Color(0xFF8B4513))
                               : null,
                         ),
