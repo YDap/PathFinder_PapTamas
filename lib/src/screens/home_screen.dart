@@ -22,6 +22,7 @@ import 'login_screen.dart';
 import 'admin_screen.dart';
 import 'friends_screen.dart';
 import 'stats_screen.dart';
+import 'leaderboard_screen.dart';
 import '../services/level_service.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -1331,6 +1332,23 @@ class _HomeScreenState extends State<HomeScreen> {
                       },
                       icon: const Icon(Icons.emoji_events_rounded),
                       label: const Text('Stats & Badges'),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => LeaderboardScreen(api: _placesApi),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.leaderboard_rounded),
+                      label: const Text('Leaderboard'),
                     ),
                   ),
                   const SizedBox(height: 10),
