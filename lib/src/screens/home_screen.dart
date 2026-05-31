@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -25,9 +26,6 @@ import 'friends_screen.dart';
 import 'stats_screen.dart';
 import 'leaderboard_screen.dart';
 import '../services/level_service.dart';
-
-// Bump this whenever you build a new release APK.
-const String _kAppVersion = '1.0.0';
 
 class HomeScreen extends StatefulWidget {
   static const routeName = '/home';
@@ -173,8 +171,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _checkForUpdate() async {
     final info = await _placesApi.fetchVersionInfo();
     if (info == null || !mounted) return;
-    if (_isNewerVersion(info.version, _kAppVersion)) {
-      _showUpdateDialog(info);
+    final packageInfo = await PackageInfo.fromPlatform();
+    if (_isNewerVersion(info.version, packageInfo.version)) {
+      if (mounted) _showUpdateDialog(info);
     }
   }
 

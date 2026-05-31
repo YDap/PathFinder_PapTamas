@@ -413,14 +413,37 @@ class PlacesApi {
     } catch (_) {}
   }
 
-  /// GET /version — returns latest published version info, or null on error.
+  /// Checks GitHub Releases for the latest published APK version.
   Future<VersionInfo?> fetchVersionInfo() async {
     try {
       final res = await http
-          .get(Uri.parse('$baseUrl/version'), headers: _jsonHeaders)
+          .get(
+            Uri.parse(
+                'https://api.github.com/repos/YDap/PathFinder_PapTamas/releases/latest'),
+            headers: {'Accept': 'application/vnd.github.v3+json'},
+          )
           .timeout(const Duration(seconds: 10));
       if (res.statusCode != 200) return null;
-      return VersionInfo.fromJson(json.decode(res.body) as Map<String, dynamic>);
+      final body = json.decode(res.body) as Map<String, dynamic>;
+      final tag =
+          (body['tag_name'] as String? ?? '').replaceFirst(RegExp(r'^v'), '');
+      if (tag.isEmpty) return null;
+
+      final assets = (body['assets'] as List? ?? []);
+      Map<String, dynamic>? apkAsset;
+      for (final a in assets) {
+        if ((a['name'] as String? ?? '').endsWith('.apk')) {
+          apkAsset = a as Map<String, dynamic>;
+          break;
+        }
+      }
+
+      return VersionInfo(
+        version: tag,
+        downloadUrl: apkAsset != null
+            ? apkAsset['browser_download_url'].toString()
+            : 'https://github.com/YDap/PathFinder_PapTamas/releases/latest',
+      );
     } catch (_) {
       return null;
     }
