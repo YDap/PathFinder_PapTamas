@@ -1022,17 +1022,22 @@ class PlacesApi {
 
   // ── Stats & Achievements ─────────────────────────────────────
 
-  Future<void> recordVisit({
+  Future<bool> recordVisit({
     required String placeId,
     required String placeName,
     required String category,
   }) async {
     final headers = await _authHeaders();
-    await http
+    final res = await http
         .post(Uri.parse('$baseUrl/stats/visit'),
             headers: headers,
             body: json.encode({'placeId': placeId, 'placeName': placeName, 'category': category}))
         .timeout(const Duration(seconds: 30));
+    if (res.statusCode == 200) {
+      final body = json.decode(res.body) as Map<String, dynamic>;
+      return body['isNew'] == true;
+    }
+    return false;
   }
 
   Future<void> addKm(double km) async {

@@ -825,7 +825,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  void _updateNavigationPolyline(LatLng userLocation) {
+  Future<void> _updateNavigationPolyline(LatLng userLocation) async {
     if (_routePolyline.isEmpty || _navigationDestination == null) return;
 
     const distance = Distance();
@@ -840,18 +840,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
     // If very close to destination, stop navigation
     if (distToDestination < 0.015) {
-      // Record stats before clearing state
       final dest = _navigationDestination;
       final totalKm = _totalRouteDistance;
-      if (dest != null && !dest.id.startsWith('nav_') && dest.id.isNotEmpty) {
-        _placesApi.recordVisit(
-          placeId: dest.id,
-          placeName: dest.name,
-          category: _statCategory(dest.category),
-        ).catchError((_) {});
-      }
-      if (totalKm > 0) _placesApi.addKm(totalKm).catchError((_) {});
 
+      // Clear navigation state first to prevent re-entry from subsequent GPS updates
       setState(() {
         _isNavigating = false;
         _routePolyline = [];
@@ -859,9 +851,26 @@ class _HomeScreenState extends State<HomeScreen> {
         _distanceToDestination = 0;
         _totalRouteDistance = 0;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Destination reached!')),
-      );
+
+      // Only award XP/km for new place visits; nav_* (shared sessions) always count
+      final isNavSession = dest == null || dest.id.isEmpty || dest.id.startsWith('nav_');
+      bool isNewPlace = false;
+      if (!isNavSession) {
+        isNewPlace = await _placesApi.recordVisit(
+          placeId: dest.id,
+          placeName: dest.name,
+          category: _statCategory(dest.category),
+        ).catchError((_) => false);
+      }
+      if (totalKm > 0 && (isNavSession || isNewPlace)) {
+        _placesApi.addKm(totalKm).catchError((_) {});
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Destination reached!')),
+        );
+      }
       return;
     }
 
