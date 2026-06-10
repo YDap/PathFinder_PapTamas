@@ -839,7 +839,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     // If very close to destination, stop navigation
-    if (distToDestination < 0.08) {
+    if (distToDestination < 0.015) {
       // Record stats before clearing state
       final dest = _navigationDestination;
       final totalKm = _totalRouteDistance;
