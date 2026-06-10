@@ -61,6 +61,7 @@ class _HomeScreenState extends State<HomeScreen> {
   late TextEditingController _distanceController;
 
   // Navigation state
+  static const double _minKmForRewards = 0.3; // minimum route distance to earn XP/badges
   Place? _navigationDestination;
   List<LatLng> _routePolyline = [];
   bool _isNavigating = false;
@@ -852,18 +853,21 @@ class _HomeScreenState extends State<HomeScreen> {
         _totalRouteDistance = 0;
       });
 
-      // Only award XP/km for new place visits; nav_* (shared sessions) always count
-      final isNavSession = dest == null || dest.id.isEmpty || dest.id.startsWith('nav_');
-      bool isNewPlace = false;
-      if (!isNavSession) {
-        isNewPlace = await _placesApi.recordVisit(
-          placeId: dest.id,
-          placeName: dest.name,
-          category: _statCategory(dest.category),
-        ).catchError((_) => false);
-      }
-      if (totalKm > 0 && (isNavSession || isNewPlace)) {
-        _placesApi.addKm(totalKm).catchError((_) {});
+      // Only award XP/km when the route meets the minimum distance threshold
+      if (totalKm >= _minKmForRewards) {
+        // Only award for new place visits; nav_* (shared sessions) always count
+        final isNavSession = dest == null || dest.id.isEmpty || dest.id.startsWith('nav_');
+        bool isNewPlace = false;
+        if (!isNavSession) {
+          isNewPlace = await _placesApi.recordVisit(
+            placeId: dest.id,
+            placeName: dest.name,
+            category: _statCategory(dest.category),
+          ).catchError((_) => false);
+        }
+        if (isNavSession || isNewPlace) {
+          _placesApi.addKm(totalKm).catchError((_) {});
+        }
       }
 
       if (mounted) {
