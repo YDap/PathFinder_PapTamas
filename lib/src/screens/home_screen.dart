@@ -17,6 +17,7 @@ import '../services/sos_service.dart';
 import '../services/routing_service.dart';
 import '../widgets/places_layer.dart';
 import '../widgets/ai_chat_sheet.dart';
+import '../widgets/zoom_out_hint.dart';
 import '../services/auth_service.dart';
 import '../services/profile_service.dart';
 import '../app.dart';
@@ -2551,6 +2552,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             final center = _currentLatLng ?? _mapController.camera.center;
                             _mapController.move(center, 10.0);
                           }
+                          _showZoomOutHint();
                         },
                         child: const Text('Apply Filters'),
                       ),
@@ -2563,6 +2565,16 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       },
     );
+  }
+
+  void _showZoomOutHint() {
+    OverlayEntry? entry;
+    entry = OverlayEntry(
+      builder: (_) => ZoomOutHintOverlay(
+        onDone: () => entry?.remove(),
+      ),
+    );
+    Overlay.of(context).insert(entry);
   }
 
   String _formatCategoryName(String category) {
