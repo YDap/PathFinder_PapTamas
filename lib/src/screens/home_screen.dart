@@ -843,7 +843,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-                'Navigating to ${destination.name.isEmpty ? 'destination' : destination.name}'),
+                '🥾 Navigating to ${destination.name.isEmpty ? 'destination' : destination.name}'),
             duration: const Duration(seconds: 2),
           ),
         );
@@ -944,7 +944,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Destination reached!')),
+          const SnackBar(content: Text('🎉 Destination reached!')),
         );
       }
       return;
@@ -1092,7 +1092,7 @@ class _HomeScreenState extends State<HomeScreen> {
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         title: const Text('Navigate Together'),
-        content: Text('${invite.creatorName} wants to navigate with you!'),
+        content: Text('🤝 ${invite.creatorName} wants to navigate with you!'),
         actions: [
           TextButton(
             onPressed: () async {
@@ -1259,7 +1259,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     _startNavSessionPolling();
                     _saveNavigationState();
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Waiting for ${f.label} to accept...')),
+                      SnackBar(content: Text('⏳ Waiting for ${f.label} to accept…')),
                     );
                   } catch (e) {
                     if (mounted) {
@@ -1624,7 +1624,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   if (_recentlyUnlocked.isNotEmpty) ...[
                     const Divider(height: 24),
                     Text(
-                      'Recently Unlocked',
+                      'Recently Unlocked 🏅',
                       style: Theme.of(ctx).textTheme.labelMedium?.copyWith(
                             fontWeight: FontWeight.w700,
                             color: cs.onSurfaceVariant,
@@ -2281,7 +2281,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                       // Title
                       Text(
-                        'Filter Places',
+                        'Filter Places 🏞️',
                         style: Theme.of(ctx)
                             .textTheme
                             .headlineSmall

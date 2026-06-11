@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-/// Brief overlay shown after Apply Filters — two finger dots spreading apart
-/// to hint the user to pinch/zoom out and see the filtered results.
+/// Brief overlay shown after Apply Filters — two finger dots pinching
+/// together to hint the user to zoom out and see the filtered results.
 class ZoomOutHintOverlay extends StatefulWidget {
   final VoidCallback onDone;
   const ZoomOutHintOverlay({super.key, required this.onDone});
@@ -14,15 +14,14 @@ class _ZoomOutHintOverlayState extends State<ZoomOutHintOverlay>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
   late final Animation<double> _fade;
-  late final Animation<double> _spread;
-  late final Animation<double> _ripple;
+  late final Animation<double> _pinch;
 
   @override
   void initState() {
     super.initState();
     _ctrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2200),
+      duration: const Duration(milliseconds: 2400),
     );
 
     _fade = TweenSequence<double>([
@@ -39,24 +38,23 @@ class _ZoomOutHintOverlayState extends State<ZoomOutHintOverlay>
       ),
     ]).animate(_ctrl);
 
-    _spread = TweenSequence<double>([
-      TweenSequenceItem(tween: ConstantTween(0.0), weight: 10),
+    // 1.0 = fingers far apart, 0.0 = fingers together. Runs twice so the
+    // pinch-in motion is clearly readable as "zoom out".
+    _pinch = TweenSequence<double>([
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 12),
       TweenSequenceItem(
-        tween: Tween(begin: 0.0, end: 1.0)
+        tween: Tween(begin: 1.0, end: 0.0)
             .chain(CurveTween(curve: Curves.easeInOut)),
-        weight: 62,
+        weight: 30,
       ),
-      TweenSequenceItem(tween: ConstantTween(1.0), weight: 28),
-    ]).animate(_ctrl);
-
-    _ripple = TweenSequence<double>([
-      TweenSequenceItem(tween: ConstantTween(0.0), weight: 10),
+      TweenSequenceItem(tween: ConstantTween(0.0), weight: 8),
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 8),
       TweenSequenceItem(
-        tween: Tween(begin: 0.0, end: 1.0)
-            .chain(CurveTween(curve: Curves.easeOut)),
-        weight: 62,
+        tween: Tween(begin: 1.0, end: 0.0)
+            .chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 30,
       ),
-      TweenSequenceItem(tween: ConstantTween(1.0), weight: 28),
+      TweenSequenceItem(tween: ConstantTween(0.0), weight: 12),
     ]).animate(_ctrl);
 
     _ctrl.forward().then((_) {
@@ -72,6 +70,9 @@ class _ZoomOutHintOverlayState extends State<ZoomOutHintOverlay>
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return AnimatedBuilder(
       animation: _ctrl,
       builder: (context, _) => Opacity(
@@ -81,14 +82,14 @@ class _ZoomOutHintOverlayState extends State<ZoomOutHintOverlay>
             color: Colors.transparent,
             child: Container(
               padding:
-                  const EdgeInsets.symmetric(horizontal: 32, vertical: 22),
+                  const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
               decoration: BoxDecoration(
-                color: const Color(0xEE1a1a2e),
+                color: isDark ? const Color(0xF22A2A2A) : Colors.white,
                 borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: Colors.white12),
-                boxShadow: const [
+                border: Border.all(color: cs.primary.withValues(alpha: 0.25)),
+                boxShadow: [
                   BoxShadow(
-                    color: Colors.black45,
+                    color: Colors.black.withValues(alpha: 0.18),
                     blurRadius: 24,
                     spreadRadius: 2,
                   ),
@@ -97,12 +98,21 @@ class _ZoomOutHintOverlayState extends State<ZoomOutHintOverlay>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _buildGesture(),
-                  const SizedBox(height: 14),
-                  const Text(
-                    'Zoom out to see filtered results',
+                  Text(
+                    'Filters applied! 🏕️',
                     style: TextStyle(
-                      color: Colors.white70,
+                      color: cs.onSurface,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildGesture(cs),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Pinch to zoom out and explore the results',
+                    style: TextStyle(
+                      color: cs.onSurfaceVariant,
                       fontSize: 12.5,
                       fontWeight: FontWeight.w500,
                     ),
@@ -116,61 +126,30 @@ class _ZoomOutHintOverlayState extends State<ZoomOutHintOverlay>
     );
   }
 
-  Widget _buildGesture() {
-    const fingerR = 12.0;
+  Widget _buildGesture(ColorScheme cs) {
+    const fingerR = 11.0;
     const maxSpread = 36.0;
-    final spread = _spread.value * maxSpread;
-    final rippleExtra = _ripple.value * 14.0;
-    final rippleOpacity = (1.0 - _ripple.value).clamp(0.0, 1.0) * 0.45;
+    final spread = 8.0 + _pinch.value * maxSpread;
+    final moving = _pinch.value > 0.02 && _pinch.value < 0.98;
 
     return SizedBox(
       width: 130,
-      height: 56,
+      height: 52,
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Outward arrows between fingers
+          // Inward arrows between the fingers (pinch-in = zoom out)
           Opacity(
-            opacity: (_spread.value * 2).clamp(0.0, 1.0) * 0.6,
-            child: const Row(
+            opacity: moving ? 0.7 : 0.0,
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.arrow_back_ios_rounded,
-                    size: 11, color: Colors.white54),
-                SizedBox(width: 18),
                 Icon(Icons.arrow_forward_ios_rounded,
-                    size: 11, color: Colors.white54),
+                    size: 11, color: cs.primary),
+                const SizedBox(width: 22),
+                Icon(Icons.arrow_back_ios_rounded,
+                    size: 11, color: cs.primary),
               ],
-            ),
-          ),
-          // Left ripple
-          Transform.translate(
-            offset: Offset(-spread, 0),
-            child: Opacity(
-              opacity: rippleOpacity,
-              child: Container(
-                width: (fingerR + rippleExtra) * 2,
-                height: (fingerR + rippleExtra) * 2,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white24,
-                ),
-              ),
-            ),
-          ),
-          // Right ripple
-          Transform.translate(
-            offset: Offset(spread, 0),
-            child: Opacity(
-              opacity: rippleOpacity,
-              child: Container(
-                width: (fingerR + rippleExtra) * 2,
-                height: (fingerR + rippleExtra) * 2,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white24,
-                ),
-              ),
             ),
           ),
           // Left finger dot
@@ -179,9 +158,11 @@ class _ZoomOutHintOverlayState extends State<ZoomOutHintOverlay>
             child: Container(
               width: fingerR * 2,
               height: fingerR * 2,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white,
+                color: cs.primary,
+                border: Border.all(
+                    color: cs.primary.withValues(alpha: 0.3), width: 3),
               ),
             ),
           ),
@@ -191,9 +172,11 @@ class _ZoomOutHintOverlayState extends State<ZoomOutHintOverlay>
             child: Container(
               width: fingerR * 2,
               height: fingerR * 2,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white,
+                color: cs.primary,
+                border: Border.all(
+                    color: cs.primary.withValues(alpha: 0.3), width: 3),
               ),
             ),
           ),

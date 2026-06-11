@@ -342,7 +342,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 Text(_displayName ?? 'Anonymous',
                     style: Theme.of(ctx).textTheme.titleLarge
                         ?.copyWith(fontWeight: FontWeight.w800)),
-                Text('Explorer profile',
+                Text('🥾 Explorer profile',
                     style: Theme.of(ctx).textTheme.bodySmall
                         ?.copyWith(color: cs.onSurfaceVariant)),
               ]),

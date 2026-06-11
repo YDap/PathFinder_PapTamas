@@ -114,7 +114,7 @@ class _FriendsScreenState extends State<FriendsScreen>
       await _loadFriends();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${user.label} is now your friend!')),
+        SnackBar(content: Text('🎉 ${user.label} is now your friend!')),
       );
     } catch (_) {}
   }
@@ -226,7 +226,7 @@ class _FriendsScreenState extends State<FriendsScreen>
           _loadingFriends
               ? const Center(child: CircularProgressIndicator())
               : _friends.isEmpty
-                  ? _empty('No friends yet.\nSearch for people in the Search tab!')
+                  ? _empty('No friends yet 🌲\nSearch for people in the Search tab!')
                   : RefreshIndicator(
                       onRefresh: _loadFriends,
                       child: ListView.builder(
@@ -253,7 +253,7 @@ class _FriendsScreenState extends State<FriendsScreen>
           _loadingRequests
               ? const Center(child: CircularProgressIndicator())
               : _requests.isEmpty
-                  ? _empty('No pending friend requests.')
+                  ? _empty('No pending friend requests 📭')
                   : RefreshIndicator(
                       onRefresh: _loadRequests,
                       child: ListView.builder(

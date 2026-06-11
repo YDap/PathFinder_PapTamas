@@ -111,7 +111,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                 ),
                 style: Theme.of(context).textTheme.titleMedium,
               )
-            : const Text('Leaderboard'),
+            : const Text('🏆 Leaderboard'),
         actions: [
           IconButton(
             icon: Icon(_searching ? Icons.close_rounded : Icons.search_rounded),
