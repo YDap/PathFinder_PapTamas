@@ -333,6 +333,21 @@ class UserStats {
 }
 
 // ─────────────────────────────────────────────────────────────
+// PublicUserProfile model (another user's profile + stats)
+// ─────────────────────────────────────────────────────────────
+class PublicUserProfile {
+  final String displayName;
+  final String? profileImageUrl;
+  final UserStats stats;
+
+  const PublicUserProfile({
+    required this.displayName,
+    this.profileImageUrl,
+    required this.stats,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
 // LeaderboardEntry model
 // ─────────────────────────────────────────────────────────────
 class LeaderboardEntry {
@@ -1057,5 +1072,19 @@ class PlacesApi {
         .timeout(const Duration(seconds: 30));
     if (res.statusCode != 200) throw Exception('Failed to fetch stats');
     return UserStats.fromJson(json.decode(res.body) as Map<String, dynamic>);
+  }
+
+  Future<PublicUserProfile> fetchUserStats(String userId) async {
+    final headers = await _authHeaders();
+    final res = await http
+        .get(Uri.parse('$baseUrl/stats/user/$userId'), headers: headers)
+        .timeout(const Duration(seconds: 30));
+    if (res.statusCode != 200) throw Exception('Failed to fetch profile');
+    final j = json.decode(res.body) as Map<String, dynamic>;
+    return PublicUserProfile(
+      displayName: j['display_name']?.toString() ?? 'Anonymous',
+      profileImageUrl: j['profile_image_url']?.toString(),
+      stats: UserStats.fromJson(j),
+    );
   }
 }

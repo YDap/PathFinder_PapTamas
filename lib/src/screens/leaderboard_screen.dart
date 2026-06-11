@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/places_api.dart';
 import '../services/level_service.dart';
+import 'stats_screen.dart';
 
 class LeaderboardScreen extends StatefulWidget {
   final PlacesApi api;
@@ -219,7 +220,20 @@ class _EntryTile extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       color: cardColor,
-      child: Padding(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => StatsScreen(
+              api: api,
+              userId: entry.userId,
+              displayName: entry.displayName,
+              profileImageUrl: avatarUrl,
+            ),
+          ),
+        ),
+        child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         child: Row(
           children: [
@@ -356,6 +370,7 @@ class _EntryTile extends StatelessWidget {
                           ),
                         ),
           ],
+        ),
         ),
       ),
     );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/places_api.dart';
 import '../widgets/create_post_sheet.dart';
+import 'stats_screen.dart';
 
 class PostsScreen extends StatefulWidget {
   final Place place;
@@ -296,22 +297,35 @@ class _PostCardState extends State<_PostCard> {
             // ── Header ──────────────────────────────────
             Row(
               children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: cs.primaryContainer,
-                  backgroundImage: authorAvatarUrl != null
-                      ? NetworkImage(authorAvatarUrl)
-                      : null,
-                  child: authorAvatarUrl == null
-                      ? Text(
-                          post.username.isNotEmpty
-                              ? post.username[0].toUpperCase()
-                              : '?',
-                          style: TextStyle(
-                              color: cs.onPrimaryContainer,
-                              fontWeight: FontWeight.bold),
-                        )
-                      : null,
+                GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => StatsScreen(
+                        api: widget.api,
+                        userId: post.userId,
+                        displayName: post.username,
+                        profileImageUrl: authorAvatarUrl,
+                      ),
+                    ),
+                  ),
+                  child: CircleAvatar(
+                    radius: 18,
+                    backgroundColor: cs.primaryContainer,
+                    backgroundImage: authorAvatarUrl != null
+                        ? NetworkImage(authorAvatarUrl)
+                        : null,
+                    child: authorAvatarUrl == null
+                        ? Text(
+                            post.username.isNotEmpty
+                                ? post.username[0].toUpperCase()
+                                : '?',
+                            style: TextStyle(
+                                color: cs.onPrimaryContainer,
+                                fontWeight: FontWeight.bold),
+                          )
+                        : null,
+                  ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(

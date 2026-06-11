@@ -871,10 +871,14 @@ class _HomeScreenState extends State<HomeScreen> {
     // Cancel any previous subscription so starting a new navigation never
     // stacks multiple listeners on the same GPS stream.
     _positionSub?.cancel();
+    // Time-based updates (every second, no distance filter) so the position
+    // marker moves smoothly while navigating instead of jumping every few
+    // meters.
     _positionSub = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 2,
+      locationSettings: AndroidSettings(
+        accuracy: LocationAccuracy.bestForNavigation,
+        distanceFilter: 0,
+        intervalDuration: const Duration(seconds: 1),
       ),
     ).listen((Position position) {
       if (_isNavigating && mounted) {
@@ -931,8 +935,11 @@ class _HomeScreenState extends State<HomeScreen> {
           ).catchError((_) => false);
         }
         if (isNavSession || isNewPlace) {
-          _placesApi.addKm(totalKm).catchError((_) {});
+          await _placesApi.addKm(totalKm).catchError((_) {});
         }
+        // Refresh cached stats so newly unlocked badges appear on the
+        // profile without restarting the app.
+        _loadStatsBackground();
       }
 
       if (mounted) {
@@ -981,7 +988,12 @@ class _HomeScreenState extends State<HomeScreen> {
     // Record the km walked so far even if destination wasn't reached.
     if (_totalRouteDistance > 0) {
       final walked = _totalRouteDistance - _distanceToDestination;
-      if (walked > 0.1) _placesApi.addKm(walked).catchError((_) {});
+      if (walked > 0.1) {
+        _placesApi
+            .addKm(walked)
+            .catchError((_) {})
+            .whenComplete(_loadStatsBackground);
+      }
     }
     _positionSub?.cancel();
     _positionSub = null;
@@ -1371,7 +1383,17 @@ class _HomeScreenState extends State<HomeScreen> {
         final cs = Theme.of(ctx).colorScheme;
         final auth = AuthService();
 
-        return DraggableScrollableSheet(
+        // Refresh stats when the sheet opens so newly unlocked badges and
+        // XP show up immediately instead of after an app restart.
+        bool statsRefreshRequested = false;
+        return StatefulBuilder(builder: (sheetCtx, setSheetState) {
+          if (!statsRefreshRequested) {
+            statsRefreshRequested = true;
+            _loadStatsBackground().then((_) {
+              if (sheetCtx.mounted) setSheetState(() {});
+            });
+          }
+          return DraggableScrollableSheet(
           expand: false,
           initialChildSize: 0.78,
           minChildSize: 0.5,
@@ -1665,6 +1687,7 @@ class _HomeScreenState extends State<HomeScreen> {
             );
           },
         );
+        });
       },
     );
   }

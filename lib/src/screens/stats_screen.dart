@@ -4,7 +4,20 @@ import '../services/level_service.dart';
 
 class StatsScreen extends StatefulWidget {
   final PlacesApi api;
-  const StatsScreen({super.key, required this.api});
+
+  /// When set, the screen shows another user's profile and badges
+  /// (read-only) instead of the current user's stats.
+  final String? userId;
+  final String? displayName;
+  final String? profileImageUrl;
+
+  const StatsScreen({
+    super.key,
+    required this.api,
+    this.userId,
+    this.displayName,
+    this.profileImageUrl,
+  });
 
   @override
   State<StatsScreen> createState() => _StatsScreenState();
@@ -12,20 +25,40 @@ class StatsScreen extends StatefulWidget {
 
 class _StatsScreenState extends State<StatsScreen> {
   UserStats? _stats;
+  String? _displayName;
+  String? _profileImageUrl;
   bool _loading = true;
   String? _error;
+
+  bool get _isOtherUser => widget.userId != null;
 
   @override
   void initState() {
     super.initState();
+    _displayName = widget.displayName;
+    _profileImageUrl = widget.profileImageUrl;
     _load();
   }
 
   Future<void> _load() async {
     setState(() { _loading = true; _error = null; });
     try {
-      final s = await widget.api.fetchMyStats();
-      if (mounted) setState(() { _stats = s; _loading = false; });
+      if (_isOtherUser) {
+        final p = await widget.api.fetchUserStats(widget.userId!);
+        if (mounted) {
+          setState(() {
+            _stats = p.stats;
+            _displayName = p.displayName;
+            if (p.profileImageUrl != null) {
+              _profileImageUrl = '${widget.api.baseUrl}${p.profileImageUrl}';
+            }
+            _loading = false;
+          });
+        }
+      } else {
+        final s = await widget.api.fetchMyStats();
+        if (mounted) setState(() { _stats = s; _loading = false; });
+      }
     } catch (e) {
       if (mounted) setState(() {
         _error = e.toString().replaceFirst('Exception: ', '');
@@ -95,7 +128,8 @@ class _StatsScreenState extends State<StatsScreen> {
                         style: const TextStyle(fontSize: 12)),
                     trailing: isCurrent
                         ? Chip(
-                            label: const Text('You', style: TextStyle(fontSize: 11)),
+                            label: Text(_isOtherUser ? 'Current' : 'You',
+                                style: const TextStyle(fontSize: 11)),
                             backgroundColor: cs.primaryContainer,
                             padding: EdgeInsets.zero,
                           )
@@ -244,7 +278,9 @@ class _StatsScreenState extends State<StatsScreen> {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Stats & Badges'),
+        title: Text(_isOtherUser
+            ? (_displayName ?? 'Profile')
+            : 'Stats & Badges'),
         actions: [
           IconButton(onPressed: _load, icon: const Icon(Icons.refresh_rounded), tooltip: 'Refresh'),
         ],
@@ -279,6 +315,41 @@ class _StatsScreenState extends State<StatsScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       children: [
+
+        // ── Profile header (only when viewing another user) ───
+        if (_isOtherUser) ...[
+          Row(children: [
+            CircleAvatar(
+              radius: 32,
+              backgroundColor: cs.primaryContainer,
+              backgroundImage: _profileImageUrl != null
+                  ? NetworkImage(_profileImageUrl!)
+                  : null,
+              child: _profileImageUrl == null
+                  ? Text(
+                      (_displayName?.isNotEmpty ?? false)
+                          ? _displayName![0].toUpperCase()
+                          : '?',
+                      style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: cs.onPrimaryContainer))
+                  : null,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(_displayName ?? 'Anonymous',
+                    style: Theme.of(ctx).textTheme.titleLarge
+                        ?.copyWith(fontWeight: FontWeight.w800)),
+                Text('Explorer profile',
+                    style: Theme.of(ctx).textTheme.bodySmall
+                        ?.copyWith(color: cs.onSurfaceVariant)),
+              ]),
+            ),
+          ]),
+          const SizedBox(height: 16),
+        ],
 
         // ── Level card (tappable → shows all levels) ──────────
         Material(

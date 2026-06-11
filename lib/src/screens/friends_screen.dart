@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/places_api.dart';
+import 'stats_screen.dart';
 
 class FriendsScreen extends StatefulWidget {
   final PlacesApi api;
@@ -150,6 +151,22 @@ class _FriendsScreenState extends State<FriendsScreen>
     } catch (_) {}
   }
 
+  void _openProfile(FriendUser user) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => StatsScreen(
+          api: widget.api,
+          userId: user.userId,
+          displayName: user.label,
+          profileImageUrl: user.profileImageUrl != null
+              ? '${widget.api.baseUrl}${user.profileImageUrl}'
+              : null,
+        ),
+      ),
+    );
+  }
+
   Widget _avatar(FriendUser user, {double radius = 22}) {
     final cs = Theme.of(context).colorScheme;
     final url = user.profileImageUrl != null
@@ -221,6 +238,7 @@ class _FriendsScreenState extends State<FriendsScreen>
                             leading: _avatar(u),
                             title: Text(u.label),
                             subtitle: u.email != null ? Text(u.email!) : null,
+                            onTap: () => _openProfile(u),
                             trailing: IconButton(
                               icon: const Icon(Icons.person_remove_rounded),
                               tooltip: 'Remove friend',
@@ -247,6 +265,7 @@ class _FriendsScreenState extends State<FriendsScreen>
                             leading: _avatar(u),
                             title: Text(u.label),
                             subtitle: u.email != null ? Text(u.email!) : null,
+                            onTap: () => _openProfile(u),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -308,6 +327,7 @@ class _FriendsScreenState extends State<FriendsScreen>
                                 leading: _avatar(u),
                                 title: Text(u.label),
                                 subtitle: u.email != null ? Text(u.email!) : null,
+                                onTap: () => _openProfile(u),
                                 trailing: _searchAction(u),
                               );
                             },
