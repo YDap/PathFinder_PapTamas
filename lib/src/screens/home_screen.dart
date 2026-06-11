@@ -69,6 +69,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _followUser = true;
   double _distanceToDestination = 0;
   double _totalRouteDistance = 0;
+  StreamSubscription<Position>? _positionSub;
 
   // Waypoints along the active route (natural places within 600 m of the route)
   List<Place> _routeWaypoints = [];
@@ -247,6 +248,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _positionSub?.cancel();
     _navPollTimer?.cancel();
     _invitePollTimer?.cancel();
     _minElevationController.dispose();
@@ -767,6 +769,11 @@ class _HomeScreenState extends State<HomeScreen> {
       _navigationDestination = destination;
       _isNavigating = true;
       _followUser = true;
+      // Clear any leftover route from a previous navigation while the new
+      // route is being fetched.
+      _routePolyline = [];
+      _distanceToDestination = 0;
+      _totalRouteDistance = 0;
     });
 
     try {
@@ -800,7 +807,9 @@ class _HomeScreenState extends State<HomeScreen> {
         setState(() {
           _isNavigating = false;
           _navigationDestination = null;
+          _routePolyline = [];
         });
+        _saveNavigationState();
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to get route: $e')),
@@ -810,7 +819,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _listenToPositionChanges() {
-    Geolocator.getPositionStream(
+    // Cancel any previous subscription so starting a new navigation never
+    // stacks multiple listeners on the same GPS stream.
+    _positionSub?.cancel();
+    _positionSub = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
         distanceFilter: 2,
@@ -846,6 +858,8 @@ class _HomeScreenState extends State<HomeScreen> {
       final totalKm = _totalRouteDistance;
 
       // Clear navigation state first to prevent re-entry from subsequent GPS updates
+      _positionSub?.cancel();
+      _positionSub = null;
       setState(() {
         _isNavigating = false;
         _routePolyline = [];
@@ -853,6 +867,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _distanceToDestination = 0;
         _totalRouteDistance = 0;
       });
+      _saveNavigationState();
 
       // Only award XP/km when the route meets the minimum distance threshold
       if (totalKm >= _minKmForRewards) {
@@ -903,11 +918,24 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_navSessionId != null) {
       _endNavSession();
     }
+    _clearActiveNavigation();
+    _saveNavigationState();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Navigation stopped')),
+    );
+  }
+
+  /// Clears the active route/navigation only — never touches the shared
+  /// session state, so it is safe to call when replacing a route after
+  /// accepting a Navigate Together invite.
+  void _clearActiveNavigation() {
     // Record the km walked so far even if destination wasn't reached.
     if (_totalRouteDistance > 0) {
       final walked = _totalRouteDistance - _distanceToDestination;
       if (walked > 0.1) _placesApi.addKm(walked).catchError((_) {});
     }
+    _positionSub?.cancel();
+    _positionSub = null;
     setState(() {
       _isNavigating = false;
       _routePolyline = [];
@@ -915,10 +943,6 @@ class _HomeScreenState extends State<HomeScreen> {
       _distanceToDestination = 0;
       _totalRouteDistance = 0;
     });
-    _saveNavigationState();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Navigation stopped')),
-    );
   }
 
   // ── Navigate Together ────────────────────────────────────────
@@ -1037,7 +1061,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 });
                 _startNavSessionPolling();
                 _saveNavigationState();
-                if (invite.hasDestination && !_isNavigating) {
+                if (invite.hasDestination) {
+                  // If the user was already navigating somewhere, drop that
+                  // route (crediting walked km) and replace it with the
+                  // shared destination.
+                  if (_isNavigating) {
+                    _clearActiveNavigation();
+                  }
                   await _startNavigation(Place(
                     id: 'nav_${invite.sessionId}',
                     name: invite.destinationName ?? 'Shared Destination',
