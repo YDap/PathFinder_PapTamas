@@ -122,12 +122,61 @@ class _HomeScreenState extends State<HomeScreen> {
     _maxElevationController = TextEditingController();
     _distanceController = TextEditingController();
     _placesApi.warmUp();
+    _restoreFilters();
     _ensureLocationAndCenter(silent: true);
     _loadProfileImage();
     _loadStatsBackground();
     _startInvitePolling();
     _checkForUpdate();
     WidgetsBinding.instance.addPostFrameCallback((_) => _restoreNavigationState());
+  }
+
+  // ── Filter persistence ───────────────────────────────────────
+
+  Future<void> _saveFilters() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('filter_categories', _selectedCategories.toList());
+    await prefs.setBool('filter_show_all', _showAllLocations);
+    if (_minElevation != null) {
+      await prefs.setInt('filter_min_elevation', _minElevation!);
+    } else {
+      await prefs.remove('filter_min_elevation');
+    }
+    if (_maxElevation != null) {
+      await prefs.setInt('filter_max_elevation', _maxElevation!);
+    } else {
+      await prefs.remove('filter_max_elevation');
+    }
+    if (_maxDistanceKm != null) {
+      await prefs.setDouble('filter_max_distance_km', _maxDistanceKm!);
+    } else {
+      await prefs.remove('filter_max_distance_km');
+    }
+  }
+
+  Future<void> _restoreFilters() async {
+    final prefs = await SharedPreferences.getInstance();
+    final cats = prefs.getStringList('filter_categories') ?? const [];
+    final showAll = prefs.getBool('filter_show_all') ?? false;
+    final minElev = prefs.getInt('filter_min_elevation');
+    final maxElev = prefs.getInt('filter_max_elevation');
+    final maxDist = prefs.getDouble('filter_max_distance_km');
+    if (!mounted) return;
+    setState(() {
+      _selectedCategories
+        ..clear()
+        ..addAll(cats);
+      _showAllLocations = showAll;
+      _minElevation = minElev;
+      _maxElevation = maxElev;
+      _maxDistanceKm = maxDist;
+      if (minElev != null) _minElevationController.text = '$minElev';
+      if (maxElev != null) _maxElevationController.text = '$maxElev';
+      if (maxDist != null) {
+        _distanceController.text =
+            maxDist == maxDist.roundToDouble() ? '${maxDist.round()}' : '$maxDist';
+      }
+    });
   }
 
   Future<void> _loadStatsBackground() async {
@@ -2177,7 +2226,11 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (ctx) {
         final cs = Theme.of(ctx).colorScheme;
 
-        return StatefulBuilder(
+        // The sheet may only be closed via the Apply Filters button —
+        // the system back gesture/button must not bypass it.
+        return PopScope(
+          canPop: false,
+          child: StatefulBuilder(
           builder: (ctx, setState) {
             return DraggableScrollableSheet(
               expand: false,
@@ -2265,6 +2318,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                 onChanged: (value) {
                                   setState(() {
                                     _showAllLocations = value;
+                                    // "Show all" and category picks are
+                                    // mutually exclusive.
+                                    if (value) _selectedCategories.clear();
                                   });
                                   this.setState(() {});
                                 },
@@ -2312,8 +2368,13 @@ class _HomeScreenState extends State<HomeScreen> {
                             selected: isSelected,
                             onSelected: (selected) {
                               setState(() {
-                                if (selected) { _selectedCategories.add(category); }
-                                else { _selectedCategories.remove(category); }
+                                if (selected) {
+                                  _selectedCategories.add(category);
+                                  // Picking a category turns "show all" off.
+                                  _showAllLocations = false;
+                                } else {
+                                  _selectedCategories.remove(category);
+                                }
                               });
                               this.setState(() {});
                             },
@@ -2343,8 +2404,13 @@ class _HomeScreenState extends State<HomeScreen> {
                             selected: isSelected,
                             onSelected: (selected) {
                               setState(() {
-                                if (selected) { _selectedCategories.add(category); }
-                                else { _selectedCategories.remove(category); }
+                                if (selected) {
+                                  _selectedCategories.add(category);
+                                  // Picking a category turns "show all" off.
+                                  _showAllLocations = false;
+                                } else {
+                                  _selectedCategories.remove(category);
+                                }
                               });
                               this.setState(() {});
                             },
@@ -2398,6 +2464,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             _maxDistanceKm =
                                 double.tryParse(v.replaceAll(',', '.'));
                           });
+                          this.setState(() {});
                         },
                         controller: _distanceController,
                       ),
@@ -2465,6 +2532,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             _distanceController.clear();
                           });
                           this.setState(() {});
+                          _saveFilters();
                         },
                         icon: const Icon(Icons.restart_alt_rounded),
                         label: const Text('Clear All Filters'),
@@ -2573,6 +2641,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       FilledButton(
                         onPressed: () {
                           Navigator.pop(ctx);
+                          _saveFilters();
                           final hasFilters = _selectedCategories.isNotEmpty ||
                               _minElevation != null ||
                               _maxElevation != null ||
@@ -2592,6 +2661,7 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             );
           },
+          ),
         );
       },
     );
