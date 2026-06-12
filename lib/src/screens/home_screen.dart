@@ -18,6 +18,7 @@ import '../services/routing_service.dart';
 import '../widgets/places_layer.dart';
 import '../widgets/ai_chat_sheet.dart';
 import '../widgets/zoom_out_hint.dart';
+import '../widgets/hiking_signs_sheet.dart';
 import '../services/auth_service.dart';
 import '../services/profile_service.dart';
 import '../app.dart';
@@ -322,6 +323,15 @@ class _HomeScreenState extends State<HomeScreen> {
           : Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                FloatingActionButton.small(
+                  heroTag: 'fab_trail_signs',
+                  tooltip: 'Hiking Trail Signs',
+                  onPressed: () => HikingSignsSheet.show(context),
+                  backgroundColor: cs.tertiaryContainer,
+                  foregroundColor: cs.onTertiaryContainer,
+                  child: const Icon(Icons.signpost_rounded),
+                ),
+                const SizedBox(height: 8),
                 FloatingActionButton.small(
                   heroTag: 'fab_help',
                   tooltip: 'Help & Legend',
