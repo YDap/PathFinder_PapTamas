@@ -992,8 +992,14 @@ class PlacesApi {
     final res = await http.get(
         Uri.parse('$baseUrl/navigate/partner-location/$sessionId'),
         headers: {..._jsonHeaders, 'Authorization': 'Bearer $token'});
-    if (res.statusCode != 200) {
+    if (res.statusCode == 404) {
+      // Session row is gone (declined or cleaned up) — genuinely over.
       return (status: 'ended', partnerLocation: null, destination: null);
+    }
+    if (res.statusCode != 200) {
+      // Transient server/network problem — report it as an error so the
+      // caller keeps the session alive instead of ending it on a hiccup.
+      return (status: 'error', partnerLocation: null, destination: null);
     }
     final body = json.decode(res.body) as Map<String, dynamic>;
     final status = body['status']?.toString() ?? 'ended';

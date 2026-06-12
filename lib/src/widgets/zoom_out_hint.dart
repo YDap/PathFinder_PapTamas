@@ -19,42 +19,41 @@ class _ZoomOutHintOverlayState extends State<ZoomOutHintOverlay>
   @override
   void initState() {
     super.initState();
+    // Stays on screen for ~5.6 s so the user has time to read the hint.
     _ctrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2400),
+      duration: const Duration(milliseconds: 5600),
     );
 
     _fade = TweenSequence<double>([
       TweenSequenceItem(
         tween: Tween(begin: 0.0, end: 1.0)
             .chain(CurveTween(curve: Curves.easeIn)),
-        weight: 10,
+        weight: 6,
       ),
-      TweenSequenceItem(tween: ConstantTween(1.0), weight: 72),
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 87),
       TweenSequenceItem(
         tween: Tween(begin: 1.0, end: 0.0)
             .chain(CurveTween(curve: Curves.easeOut)),
-        weight: 18,
+        weight: 7,
       ),
     ]).animate(_ctrl);
 
-    // 1.0 = fingers far apart, 0.0 = fingers together. Runs twice so the
-    // pinch-in motion is clearly readable as "zoom out".
+    // 1.0 = fingers far apart, 0.0 = fingers together. Runs four times so the
+    // pinch-in motion is clearly readable as "zoom out" for the full duration.
     _pinch = TweenSequence<double>([
-      TweenSequenceItem(tween: ConstantTween(1.0), weight: 12),
-      TweenSequenceItem(
-        tween: Tween(begin: 1.0, end: 0.0)
-            .chain(CurveTween(curve: Curves.easeInOut)),
-        weight: 30,
-      ),
-      TweenSequenceItem(tween: ConstantTween(0.0), weight: 8),
-      TweenSequenceItem(tween: ConstantTween(1.0), weight: 8),
-      TweenSequenceItem(
-        tween: Tween(begin: 1.0, end: 0.0)
-            .chain(CurveTween(curve: Curves.easeInOut)),
-        weight: 30,
-      ),
-      TweenSequenceItem(tween: ConstantTween(0.0), weight: 12),
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 5),
+      for (var cycle = 0; cycle < 4; cycle++) ...[
+        TweenSequenceItem(
+          tween: Tween(begin: 1.0, end: 0.0)
+              .chain(CurveTween(curve: Curves.easeInOut)),
+          weight: 14,
+        ),
+        TweenSequenceItem(tween: ConstantTween(0.0), weight: 5),
+        // Snap back apart before the next pinch (skipped after the last one).
+        if (cycle < 3) TweenSequenceItem(tween: ConstantTween(1.0), weight: 3),
+      ],
+      TweenSequenceItem(tween: ConstantTween(0.0), weight: 10),
     ]).animate(_ctrl);
 
     _ctrl.forward().then((_) {

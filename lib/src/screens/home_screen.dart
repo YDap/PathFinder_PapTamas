@@ -71,6 +71,11 @@ class _HomeScreenState extends State<HomeScreen> {
   double _totalRouteDistance = 0;
   StreamSubscription<Position>? _positionSub;
 
+  // GPS sanity filtering: GPS occasionally emits a coarse cell-tower fix or a
+  // teleport-style jump, which placed the marker at a random spot on the map.
+  Position? _lastAcceptedFix;
+  int _rejectedFixStreak = 0;
+
   // Waypoints along the active route (natural places within 600 m of the route)
   List<Place> _routeWaypoints = [];
 
@@ -780,9 +785,7 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
 
-      final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
+      final pos = await _getAccuratePosition();
       final latLng = LatLng(pos.latitude, pos.longitude);
 
       setState(() {
@@ -802,6 +805,61 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       }
     }
+  }
+
+  /// Gets a position, and when the first fix is poor (>50 m accuracy) keeps
+  /// sampling the GPS stream briefly for the most accurate fix. Prevents the
+  /// "current location" button from centering on a coarse cell-tower fix.
+  Future<Position> _getAccuratePosition() async {
+    Position best = await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high,
+    );
+    if (best.accuracy > 50) {
+      try {
+        await for (final p in Geolocator.getPositionStream(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.best,
+            distanceFilter: 0,
+          ),
+        ).take(6).timeout(const Duration(seconds: 6))) {
+          if (p.accuracy < best.accuracy) best = p;
+          if (best.accuracy <= 25) break;
+        }
+      } catch (_) {
+        // Timed out — keep the most accurate fix collected so far.
+      }
+    }
+    _lastAcceptedFix = best;
+    _rejectedFixStreak = 0;
+    return best;
+  }
+
+  /// Returns true when [pos] is a believable GPS fix. Rejects low-accuracy
+  /// fixes and physically impossible jumps, but accepts after several
+  /// consecutive rejections so the marker can never get stuck forever.
+  bool _isPlausibleFix(Position pos) {
+    final last = _lastAcceptedFix;
+    bool plausible;
+    if (last == null) {
+      plausible = pos.accuracy <= 150;
+    } else {
+      plausible = pos.accuracy <= 100;
+      if (plausible) {
+        final meters = Geolocator.distanceBetween(
+            last.latitude, last.longitude, pos.latitude, pos.longitude);
+        final dt =
+            pos.timestamp.difference(last.timestamp).inMilliseconds / 1000.0;
+        // Faster than ~200 km/h between two fixes is a GPS glitch, not travel.
+        if (dt > 0 && meters > 100 && meters / dt > 55) plausible = false;
+      }
+    }
+    if (!plausible && _rejectedFixStreak < 5) {
+      _rejectedFixStreak++;
+      return false;
+    }
+    _rejectedFixStreak = 0;
+    _lastAcceptedFix = pos;
+    return true;
   }
 
   Future<void> _startNavigation(Place destination) async {
@@ -881,6 +939,7 @@ class _HomeScreenState extends State<HomeScreen> {
         intervalDuration: const Duration(seconds: 1),
       ),
     ).listen((Position position) {
+      if (!_isPlausibleFix(position)) return;
       if (_isNavigating && mounted) {
         final userLocation = LatLng(position.latitude, position.longitude);
         setState(() => _currentLatLng = userLocation);
@@ -1109,6 +1168,14 @@ class _HomeScreenState extends State<HomeScreen> {
               Navigator.pop(ctx);
               try {
                 await _placesApi.acceptNavSession(invite.sessionId);
+                // Push our location right away so the partner's very first
+                // poll after accept finds a fresh location row.
+                if (_currentLatLng != null) {
+                  _placesApi
+                      .updateNavLocation(invite.sessionId,
+                          _currentLatLng!.latitude, _currentLatLng!.longitude)
+                      .catchError((_) {});
+                }
                 if (!mounted) return;
                 setState(() {
                   _navSessionId = invite.sessionId;
@@ -1248,6 +1315,16 @@ class _HomeScreenState extends State<HomeScreen> {
                           ? null
                           : _navigationDestination?.name,
                     );
+                    // Backend accepts location updates while the session is
+                    // still 'invited', so our row exists before the partner
+                    // accepts — prevents the fresh session from being expired
+                    // as stale.
+                    if (_currentLatLng != null) {
+                      _placesApi
+                          .updateNavLocation(sessionId,
+                              _currentLatLng!.latitude, _currentLatLng!.longitude)
+                          .catchError((_) {});
+                    }
                     if (!mounted) return;
                     setState(() {
                       _navSessionId = sessionId;

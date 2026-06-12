@@ -66,6 +66,14 @@ class PlacesLayerState extends State<PlacesLayer> {
 
   static const int _maxCacheSize = 4000;
 
+  // Area already covered by the last successful fetch (including padding) and
+  // when it happened. While navigating, the camera follows the user and fires
+  // MoveEnd every second — without this check the app refetched places every
+  // second, which made it constantly lag.
+  LatLngBounds? _coveredBounds;
+  DateTime? _lastFetchAt;
+  static const _refetchTtl = Duration(minutes: 3);
+
   // Tracks the last set of waypoint IDs sent via the callback so we only fire
   // when the list actually changes.
   List<String> _lastWaypointIds = [];
@@ -139,25 +147,47 @@ class PlacesLayerState extends State<PlacesLayer> {
       final sw = bounds.southWest;
       final ne = bounds.northEast;
 
+      // Skip the network entirely when the visible area is still inside the
+      // padded area of a recent fetch — the cache already has these places.
+      if (_coveredBounds != null &&
+          _lastFetchAt != null &&
+          DateTime.now().difference(_lastFetchAt!) < _refetchTtl &&
+          _covers(_coveredBounds!, bounds)) {
+        return;
+      }
+
       setState(() { _loading = true; _lastError = null; });
 
       final List<Place> data;
+      final LatLngBounds fetchedArea;
       if (widget.mapController.camera.zoom < 11) {
         // Large viewport: split into 4 quadrants fetched in parallel so that
         // places near the edges of the screen are covered, not just the centre.
         data = await _fetchTiled(sw, ne);
+        final latPad = (ne.latitude  - sw.latitude)  * 0.15;
+        final lngPad = (ne.longitude - sw.longitude) * 0.15;
+        fetchedArea = LatLngBounds(
+          LatLng(sw.latitude - latPad, sw.longitude - lngPad),
+          LatLng(ne.latitude + latPad, ne.longitude + lngPad),
+        );
       } else {
         // Smaller viewport: single fetch with 25% padding is sufficient.
         final latPad = (ne.latitude  - sw.latitude)  * 0.25;
         final lngPad = (ne.longitude - sw.longitude) * 0.25;
+        fetchedArea = LatLngBounds(
+          LatLng(sw.latitude - latPad, sw.longitude - lngPad),
+          LatLng(ne.latitude + latPad, ne.longitude + lngPad),
+        );
         data = await widget.api.fetchInBounds(
-          southWest: LatLng(sw.latitude  - latPad, sw.longitude - lngPad),
-          northEast: LatLng(ne.latitude  + latPad, ne.longitude + lngPad),
+          southWest: fetchedArea.southWest,
+          northEast: fetchedArea.northEast,
           limit: widget.limit,
         );
       }
 
       if (!mounted) return;
+      _coveredBounds = fetchedArea;
+      _lastFetchAt = DateTime.now();
       setState(() {
         for (final p in data) {
           _cache[p.id] = p;
@@ -175,6 +205,13 @@ class PlacesLayerState extends State<PlacesLayer> {
       setState(() { _loading = false; _lastError = e; });
     }
   }
+
+  /// Whether [outer] fully contains [inner].
+  bool _covers(LatLngBounds outer, LatLngBounds inner) =>
+      outer.southWest.latitude  <= inner.southWest.latitude  &&
+      outer.southWest.longitude <= inner.southWest.longitude &&
+      outer.northEast.latitude  >= inner.northEast.latitude  &&
+      outer.northEast.longitude >= inner.northEast.longitude;
 
   /// Divides [sw]→[ne] into 4 quadrants and fetches them concurrently.
   /// Deduplicates by place ID before returning. Each quadrant uses 25%
