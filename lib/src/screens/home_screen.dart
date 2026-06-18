@@ -379,11 +379,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 maxElevation: _maxElevation,
                 maxDistanceKm: _maxDistanceKm,
                 currentLocation: _currentLatLng,
-                showLocations: _showAllLocations ||
-                    _selectedCategories.isNotEmpty ||
-                    _minElevation != null ||
-                    _maxElevation != null ||
-                    _maxDistanceKm != null,
+                // Locations are revealed only by "Show All" or by picking
+                // categories. Distance/elevation are refinements applied on
+                // top inside PlacesLayer — on their own they must NOT force
+                // every location to appear (a remembered max-distance filter
+                // used to keep everything visible and make the toggle look
+                // broken).
+                showLocations:
+                    _showAllLocations || _selectedCategories.isNotEmpty,
                 onNavigate: _startNavigation,
                 isAdmin: _isAdmin,
                 routePolyline: _routePolyline,
@@ -527,10 +530,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           // Hint when no locations are shown
-          if (!_showAllLocations &&
-              _selectedCategories.isEmpty &&
-              _minElevation == null &&
-              _maxElevation == null)
+          if (!_showAllLocations && _selectedCategories.isEmpty)
             Positioned(
               top: MediaQuery.of(context).padding.top + 100,
               left: 12,
