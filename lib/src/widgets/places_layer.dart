@@ -99,6 +99,31 @@ class PlacesLayerState extends State<PlacesLayer> {
     if (oldWidget.routePolyline != widget.routePolyline) {
       _notifyWaypoints();
     }
+    // React to filter / visibility changes immediately instead of waiting for
+    // the user to pan the map. Turning a filter off rebuilds with the new
+    // (empty) marker set via build(); turning one on may need a fetch for the
+    // current view, since a programmatic camera move emits no map event.
+    final filtersChanged = oldWidget.showLocations != widget.showLocations ||
+        oldWidget.minElevation != widget.minElevation ||
+        oldWidget.maxElevation != widget.maxElevation ||
+        oldWidget.maxDistanceKm != widget.maxDistanceKm ||
+        !_sameSet(oldWidget.selectedCategories, widget.selectedCategories);
+    if (filtersChanged && widget.showLocations) {
+      _loadNow();
+    }
+  }
+
+  static bool _sameSet(Set<String> a, Set<String> b) =>
+      a.length == b.length && a.containsAll(b);
+
+  /// Forces an immediate marker refresh and, when locations are visible, a data
+  /// fetch for the current view. Called after the filter sheet is applied: the
+  /// sheet moves the camera programmatically, which does not emit a map event,
+  /// so the marker fetch would otherwise not run until the user pans the map.
+  void reload() {
+    if (!mounted) return;
+    setState(() {});
+    if (widget.showLocations) _loadNow();
   }
 
   @override

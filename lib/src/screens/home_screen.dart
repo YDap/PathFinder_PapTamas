@@ -374,7 +374,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 mapController: _mapController,
                 api: _placesApi,
                 limit: 1000,
-                selectedCategories: _selectedCategories,
+                selectedCategories: Set<String>.from(_selectedCategories),
                 minElevation: _minElevation,
                 maxElevation: _maxElevation,
                 maxDistanceKm: _maxDistanceKm,
@@ -806,7 +806,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       // If navigation is active, update polyline
       if (_isNavigating) {
-        _updateNavigationPolyline(latLng);
+        _updateNavigationPolyline(latLng, pos.accuracy);
       }
     } catch (e) {
       if (!silent && mounted) {
@@ -956,12 +956,13 @@ class _HomeScreenState extends State<HomeScreen> {
         if (_followUser) {
           _mapController.move(userLocation, _mapController.camera.zoom);
         }
-        _updateNavigationPolyline(userLocation);
+        _updateNavigationPolyline(userLocation, position.accuracy);
       }
     });
   }
 
-  Future<void> _updateNavigationPolyline(LatLng userLocation) async {
+  Future<void> _updateNavigationPolyline(
+      LatLng userLocation, double accuracyMeters) async {
     if (_routePolyline.isEmpty || _navigationDestination == null) return;
 
     const distance = Distance();
@@ -974,8 +975,14 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
 
-    // If very close to destination, stop navigation
-    if (distToDestination < 0.015) {
+    // Only treat the destination as reached when the fix is accurate enough
+    // that a "within 20 m" reading can be trusted. Navigation accepts fixes
+    // with up to 100 m accuracy so the marker keeps moving smoothly — but a
+    // single noisy fix can momentarily land near the destination while the
+    // user is still 100–300 m away, which used to end navigation far too
+    // early. Requiring a tight accuracy radius (≤25 m) here prevents that.
+    final reached = distToDestination < 0.020 && accuracyMeters <= 25;
+    if (reached) {
       final dest = _navigationDestination;
       final totalKm = _totalRouteDistance;
 
@@ -2761,6 +2768,11 @@ class _HomeScreenState extends State<HomeScreen> {
                             final center = _currentLatLng ?? _mapController.camera.center;
                             _mapController.move(center, 10.0);
                           }
+                          // The camera move above is programmatic and emits no
+                          // MoveEnd event, so the places layer would not fetch
+                          // for the new view until the user pans. Trigger it
+                          // (and a marker refresh) explicitly.
+                          _placesLayerKey.currentState?.reload();
                           _showZoomOutHint();
                         },
                         child: const Text('Apply Filters'),
