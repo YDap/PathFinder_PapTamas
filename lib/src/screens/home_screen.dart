@@ -71,6 +71,12 @@ class _HomeScreenState extends State<HomeScreen> {
   double _distanceToDestination = 0;
   double _totalRouteDistance = 0;
   StreamSubscription<Position>? _positionSub;
+  // Consecutive GPS fixes that landed inside the arrival radius. We only
+  // declare the destination "reached" after several in a row so a single
+  // optimistic-but-wrong fix (common in forests/mountains, where the phone
+  // reports good accuracy while actually being hundreds of metres off) can
+  // never end navigation early.
+  int _destReachedHits = 0;
 
   // GPS sanity filtering: GPS occasionally emits a coarse cell-tower fix or a
   // teleport-style jump, which placed the marker at a random spot on the map.
@@ -891,6 +897,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _routePolyline = [];
       _distanceToDestination = 0;
       _totalRouteDistance = 0;
+      _destReachedHits = 0;
     });
 
     try {
@@ -976,13 +983,25 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     // Only treat the destination as reached when the fix is accurate enough
-    // that a "within 20 m" reading can be trusted. Navigation accepts fixes
+    // that a "within 30 m" reading can be trusted. Navigation accepts fixes
     // with up to 100 m accuracy so the marker keeps moving smoothly — but a
     // single noisy fix can momentarily land near the destination while the
     // user is still 100–300 m away, which used to end navigation far too
-    // early. Requiring a tight accuracy radius (≤25 m) here prevents that.
-    final reached = distToDestination < 0.020 && accuracyMeters <= 25;
+    // early. The accuracy field alone is not enough: in forests and mountains
+    // the phone often reports good accuracy (≤25 m) while the real fix is
+    // hundreds of metres off. So we additionally require several consecutive
+    // in-radius fixes — a transient glitch resets the counter and is ignored.
+    const arrivalRadiusKm = 0.030; // 30 m
+    const requiredHits = 3; // ~3 s of being genuinely inside the radius
+    final inRange = distToDestination < arrivalRadiusKm && accuracyMeters <= 25;
+    if (inRange) {
+      _destReachedHits++;
+    } else {
+      _destReachedHits = 0;
+    }
+    final reached = _destReachedHits >= requiredHits;
     if (reached) {
+      _destReachedHits = 0;
       final dest = _navigationDestination;
       final totalKm = _totalRouteDistance;
 
