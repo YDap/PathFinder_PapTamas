@@ -2296,7 +2296,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 item(Icons.location_on_outlined, 'Current Location',
                     'Centers the map on your GPS position.'),
                 item(Icons.tune_rounded, 'Filters',
-                    'Filter places by type, elevation range, or distance from you. Applying a filter zooms the map out to show results.'),
+                    'Filter places by type, elevation range, or distance from you.'),
                 item(Icons.auto_awesome_rounded, 'AI Assistant',
                     'Ask the AI to find places for you in natural language — e.g. "show me lakes above 1500m".'),
                 item(Icons.person_rounded, 'Profile',
@@ -2778,19 +2778,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         onPressed: () {
                           Navigator.pop(ctx);
                           _saveFilters();
-                          final hasFilters = _selectedCategories.isNotEmpty ||
-                              _minElevation != null ||
-                              _maxElevation != null ||
-                              _maxDistanceKm != null ||
-                              _showAllLocations;
-                          if (hasFilters) {
-                            final center = _currentLatLng ?? _mapController.camera.center;
-                            _mapController.move(center, 10.0);
-                          }
-                          // The camera move above is programmatic and emits no
-                          // MoveEnd event, so the places layer would not fetch
-                          // for the new view until the user pans. Trigger it
-                          // (and a marker refresh) explicitly.
                           _placesLayerKey.currentState?.reload();
                           _showZoomOutHint();
                         },
