@@ -83,6 +83,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Position? _lastAcceptedFix;
   int _rejectedFixStreak = 0;
 
+  // Off-route rerouting: debounce timer + in-flight flag.
+  Timer? _rerouteDebounce;
+  bool _isRerouting = false;
+
   // Waypoints along the active route (natural places within 600 m of the route)
   List<Place> _routeWaypoints = [];
 
@@ -312,6 +316,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _positionSub?.cancel();
     _navPollTimer?.cancel();
     _invitePollTimer?.cancel();
+    _rerouteDebounce?.cancel();
     _minElevationController.dispose();
     _maxElevationController.dispose();
     _distanceController.dispose();
@@ -1110,6 +1115,24 @@ class _HomeScreenState extends State<HomeScreen> {
       userLocation,
     );
 
+    // Off-route detection: if the nearest node is > 80 m away, schedule a
+    // reroute after 8 s of being off-path (debounced so GPS noise never
+    // triggers it; cancelled immediately when the user returns to the route).
+    if (!_isRerouting && result.value.isNotEmpty) {
+      final distToRoute = const Distance().as(
+        LengthUnit.Meter, userLocation, result.value.first,
+      );
+      if (distToRoute > 80) {
+        _rerouteDebounce ??= Timer(const Duration(seconds: 8), () {
+          _rerouteDebounce = null;
+          _recalculateRoute();
+        });
+      } else {
+        _rerouteDebounce?.cancel();
+        _rerouteDebounce = null;
+      }
+    }
+
     // Calculate remaining distance along the route
     final remainingDistance =
         RoutingService.calculatePolylineDistance(result.value) /
@@ -1120,6 +1143,39 @@ class _HomeScreenState extends State<HomeScreen> {
         _routePolyline = result.value;
         _distanceToDestination = remainingDistance;
       });
+    }
+  }
+
+  /// Fetches a fresh route from the current GPS position to the active
+  /// destination and replaces the on-screen polyline.
+  Future<void> _recalculateRoute() async {
+    final origin = _currentLatLng;
+    if (!_isNavigating || _navigationDestination == null || origin == null) return;
+    if (mounted) {
+      setState(() => _isRerouting = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Recalculating route…'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+    try {
+      final routeData = await RoutingService().getRoute(
+        origin,
+        LatLng(_navigationDestination!.latitude, _navigationDestination!.longitude),
+      );
+      if (mounted && _isNavigating) {
+        setState(() {
+          _routePolyline = routeData.polyline;
+          _totalRouteDistance = routeData.distance / 1000;
+          _distanceToDestination = _totalRouteDistance;
+          _isRerouting = false;
+        });
+        _saveNavigationState();
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isRerouting = false);
     }
   }
 
@@ -1151,6 +1207,9 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     _positionSub?.cancel();
     _positionSub = null;
+    _rerouteDebounce?.cancel();
+    _rerouteDebounce = null;
+    _isRerouting = false;
     setState(() {
       _isNavigating = false;
       _routePolyline = [];
