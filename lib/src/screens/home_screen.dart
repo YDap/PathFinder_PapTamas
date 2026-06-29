@@ -748,6 +748,23 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// Normalize a category string the same way PlacesLayer does so that a
+  /// category added here will match the filter check in PlacesLayer.
+  static String _normalizeAiCategory(String category) {
+    switch (category.toLowerCase()) {
+      case 'caves':
+      case 'cave_entrance': return 'cave';
+      case 'ruins':
+      case 'archaeological_site': return 'ruin';
+      case 'fast_food': return 'restaurant';
+      case 'supermarket':
+      case 'convenience': return 'marketplace';
+      case 'guest_house':
+      case 'hostel': return 'hotel';
+      default: return category.toLowerCase();
+    }
+  }
+
   void _openAiChatSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -760,6 +777,48 @@ class _HomeScreenState extends State<HomeScreen> {
         api: _placesApi,
         currentLocation: _currentLatLng,
         onShowOnMap: (place) {
+          bool filtersChanged = false;
+          final normalizedCat = _normalizeAiCategory(place.category);
+
+          // Ensure the place's category is visible on the map.
+          if (!_showAllLocations && !_selectedCategories.contains(normalizedCat)) {
+            setState(() => _selectedCategories.add(normalizedCat));
+            filtersChanged = true;
+          }
+
+          // Clear the distance filter if the place is farther than the limit.
+          if (_maxDistanceKm != null && _currentLatLng != null) {
+            final km = const Distance().as(
+              LengthUnit.Kilometer,
+              _currentLatLng!,
+              LatLng(place.latitude, place.longitude),
+            );
+            if (km > _maxDistanceKm!) {
+              setState(() {
+                _maxDistanceKm = null;
+                _distanceController.clear();
+              });
+              filtersChanged = true;
+            }
+          }
+
+          // Clear elevation filters if the place falls outside their range.
+          if (place.elevationM != null) {
+            final elev = place.elevationM!;
+            if ((_minElevation != null && elev < _minElevation!) ||
+                (_maxElevation != null && elev > _maxElevation!)) {
+              setState(() {
+                _minElevation = null;
+                _maxElevation = null;
+                _minElevationController.clear();
+                _maxElevationController.clear();
+              });
+              filtersChanged = true;
+            }
+          }
+
+          if (filtersChanged) _saveFilters();
+
           _mapController.move(
             LatLng(place.latitude, place.longitude),
             14,
